@@ -1,0 +1,26 @@
+# Auto-loaded by `docker compose` for local development.
+#
+# It builds the `dev` image stage (dev dependencies included, so `make test`
+# and `make lint` work inside the container), bind-mounts the source for
+# hot-reload, and exposes Postgres to the host so you can point a GUI at it.
+#
+# Deploying somewhere real?  Use `docker compose -f docker-compose.yml ...`
+# to skip this file entirely — that's what `make prod-up` does.
+
+services:
+  db:
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+
+  api:
+    build:
+      target: dev
+    volumes:
+      - ./backend:/app
+      - audio:/data/audio
+      # Keep the image's virtualenv from being shadowed by the bind mount.
+      - /app/.venv
+    environment:
+      ENKA_ENV: dev
+      ENKA_DEBUG: "true"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

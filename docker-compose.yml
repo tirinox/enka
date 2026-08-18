@@ -1,0 +1,60 @@
+name: enka
+
+services:
+  db:
+    # Debian-based on purpose, not -alpine: musl's locale support is stubbed
+    # out, which makes lower() a no-op for non-ASCII text. In a language-study
+    # app that silently breaks case-insensitive search for Cyrillic, Greek,
+    # umlauts — everything that isn't a–z.
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-enka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-enka}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-enka} -d ${POSTGRES_DB:-enka}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-enka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-enka}
+      ENKA_ACCESS_SECRET: ${ENKA_ACCESS_SECRET:?set ENKA_ACCESS_SECRET in .env}
+      ENKA_JWT_SECRET: ${ENKA_JWT_SECRET:?set ENKA_JWT_SECRET in .env}
+      ENKA_JWT_TTL_HOURS: ${ENKA_JWT_TTL_HOURS:-720}
+      ENKA_OWNER_NAME: ${ENKA_OWNER_NAME:-me}
+      ENKA_AUDIO_DIR: /data/audio
+      ENKA_MAX_AUDIO_MB: ${ENKA_MAX_AUDIO_MB:-25}
+      ENKA_FSRS_DESIRED_RETENTION: ${ENKA_FSRS_DESIRED_RETENTION:-0.9}
+      ENKA_FSRS_MAXIMUM_INTERVAL: ${ENKA_FSRS_MAXIMUM_INTERVAL:-36500}
+      ENKA_FSRS_ENABLE_FUZZING: ${ENKA_FSRS_ENABLE_FUZZING:-true}
+      ENKA_ENV: ${ENKA_ENV:-dev}
+      ENKA_LOG_LEVEL: ${ENKA_LOG_LEVEL:-INFO}
+      ENKA_CORS_ORIGINS: ${ENKA_CORS_ORIGINS:-*}
+    volumes:
+      - audio:/data/audio
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  pgdata:
+  audio:
