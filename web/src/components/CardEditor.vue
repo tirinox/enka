@@ -32,7 +32,29 @@ const uploading = ref<AudioSide | null>(null)
 const termInput = ref<HTMLInputElement | null>(null)
 
 const isNew = computed(() => props.card === null)
-const dirty = ref(false)
+
+/**
+ * "Unsaved changes" is a comparison, not a flag.
+ *
+ * A boolean set from a watcher can't tell a real edit from `reset()` writing
+ * the loaded card into the same refs — it fired on open and after every save,
+ * so closing always prompted. Comparing against a snapshot taken whenever the
+ * form matches the server can't drift that way.
+ */
+const baseline = ref('')
+
+function snapshot(): string {
+  return JSON.stringify({
+    term: term.value.trim(),
+    definition: definition.value.trim(),
+    notes: notes.value.trim(),
+    stars: stars.value,
+    suspended: suspended.value,
+    tags: [...tags.value].sort(),
+  })
+}
+
+const dirty = computed(() => snapshot() !== baseline.value)
 
 const canSave = computed(() => term.value.trim().length > 0 && !saving.value)
 
@@ -53,7 +75,7 @@ function reset() {
   suspended.value = c?.suspended ?? false
   tags.value = [...(c?.tags ?? [])]
   tagDraft.value = ''
-  dirty.value = false
+  baseline.value = snapshot()
 }
 
 watch(
@@ -66,10 +88,6 @@ watch(
   },
   { immediate: true },
 )
-
-watch([term, definition, notes, stars, suspended, tags], () => (dirty.value = true), {
-  deep: true,
-})
 
 function addTag(name?: string) {
   const value = (name ?? tagDraft.value).trim()
@@ -98,7 +116,7 @@ async function save() {
     const saved = props.card
       ? await api.cards.update(props.card.id, payload)
       : await api.cards.create(payload)
-    dirty.value = false
+    baseline.value = snapshot()
     toasts.success(props.card ? 'Card updated.' : 'Card added.')
     emit('saved', saved)
   } catch (e) {
