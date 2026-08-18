@@ -219,3 +219,9 @@ __marimo__/
 
 # Enka: local database dumps and audio archives
 backups/
+
+# Web client
+node_modules/
+web/dist/
+web/.vite/
+web/*.tsbuildinfo

@@ -9,14 +9,14 @@ word when you meet it, fill in the meaning later. Scheduling uses
 [FSRS](https://github.com/open-spaced-repetition/py-fsrs), the algorithm behind
 modern Anki.
 
-This repository will eventually hold three parts. **Only the backend exists so
-far**; the macOS and web clients come next and will talk to this API.
+This repository will eventually hold three parts. The backend and the web
+client exist; the macOS client comes next and will talk to the same API.
 
 ```
 enka/
-├── backend/     ← this
-├── macos/       ← later
-└── web/         ← later
+├── backend/     ← FastAPI + Postgres
+├── web/         ← Vue 3 client
+└── macos/       ← later
 ```
 
 ## Quick start
@@ -39,6 +39,17 @@ make stats    # collection statistics
 ```
 
 `make` on its own lists every target.
+
+## The web client
+
+```bash
+npm install --prefix web
+npm run dev --prefix web
+```
+
+<http://localhost:5273>, then sign in with the secret above. Studying is
+keyboard-first: `Space` reveals, `1`–`4` rate, `U` undoes. See
+[`web/README.md`](web/README.md) for the rest.
 
 ## How auth works
 
