@@ -39,9 +39,13 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.isAuthenticated) {
+    // An expired token isn't a dead end if the secret was remembered — mint a
+    // new one and carry on, rather than showing a login screen we can fill in
+    // ourselves.
+    if (await auth.renewIfPossible()) return true
     return { name: 'login', query: to.fullPath === '/' ? {} : { next: to.fullPath } }
   }
   if (to.name === 'login' && auth.isAuthenticated) {

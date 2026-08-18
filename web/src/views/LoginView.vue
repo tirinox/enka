@@ -10,13 +10,14 @@ const route = useRoute()
 
 const secret = ref('')
 const reveal = ref(false)
+const remember = ref(true)
 const serverVersion = ref<string | null>(null)
 const serverReachable = ref<boolean | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 
 async function submit() {
   if (!secret.value.trim() || auth.busy) return
-  if (await auth.login(secret.value.trim())) {
+  if (await auth.login(secret.value.trim(), remember.value)) {
     const next = route.query.next
     router.push(typeof next === 'string' ? next : { name: 'study' })
   } else {
@@ -73,6 +74,11 @@ onMounted(async () => {
             Run <code class="mono">make secret</code> on the server if you don't have it.
           </p>
         </div>
+
+        <label class="remember">
+          <input v-model="remember" type="checkbox" />
+          <span>Stay signed in on this device</span>
+        </label>
 
         <p v-if="auth.error" class="error">{{ auth.error }}</p>
 
@@ -179,6 +185,15 @@ h1 {
   background: var(--bg-elevated);
   border-radius: var(--radius-sm);
   font-size: 0.95em;
+}
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 .error {

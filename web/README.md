@@ -73,7 +73,17 @@ only file that parses it. Everything else catches `ApiError` and shows
 
 **Tokens.** The 30-day JWT lives in `localStorage` alongside its expiry, and a
 token known to be stale counts as no token — you get the login screen instead
-of watching a request fail. Audio is the exception the API carves out: a
+of watching a request fail. *Stay signed in on this device* additionally keeps
+the secret itself, which buys one thing the token can't: when the JWT lapses,
+the router mints a new one and carries on rather than interrupting you. If the
+server's secret was rotated in the meantime the stored one is discarded on its
+first failure, so a dead credential isn't retried on every navigation. Signing
+out forgets both — which is why it asks first.
+
+Storing the secret is a real trade: any script running on the app's origin can
+read it, and unlike the token it never expires on its own. It's the same
+exposure as the JWT, without the time limit. Untick the box to keep only the
+token, and sign out on a machine that isn't yours. Audio is the exception the API carves out: a
 browser can't set a header on `<audio src>`, so clips are fetched with a
 short-lived media-scoped token from `POST /auth/media-token`. The media store
 holds one and re-mints it 30 seconds before it lapses, rather than one per

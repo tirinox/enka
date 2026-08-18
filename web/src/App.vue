@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from '@/components/AppSidebar.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ToastHost from '@/components/ToastHost.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -24,6 +25,7 @@ onMounted(() => auth.refreshOwner())
         </Transition>
       </RouterView>
     </main>
+    <ConfirmDialog />
     <ToastHost />
   </div>
 </template>

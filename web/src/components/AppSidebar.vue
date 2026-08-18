@@ -3,8 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirmStore } from '@/stores/confirm'
 
 const auth = useAuthStore()
+const confirm = useConfirmStore()
 const router = useRouter()
 
 const dueNow = ref<number | null>(null)
@@ -31,7 +33,19 @@ function toggleTheme() {
   localStorage.setItem('enka.theme', theme.value)
 }
 
-function signOut() {
+async function signOut() {
+  // Signing out forgets the remembered secret as well as the token, so this
+  // costs more than it looks like it does — say so rather than asking a bare
+  // "are you sure".
+  const ok = await confirm.ask({
+    title: 'Sign out?',
+    message: auth.remembers
+      ? "This device will forget the access secret, so you'll need it again to sign back in."
+      : undefined,
+    confirmLabel: 'Sign out',
+    tone: 'danger',
+  })
+  if (!ok) return
   auth.logout()
   router.push({ name: 'login' })
 }

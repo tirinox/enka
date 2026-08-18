@@ -9,6 +9,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { ApiError, api } from '@/api/client'
 import { bytes, fullDate, percent, relativeTime } from '@/composables/format'
+import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import AudioPlayer from '@/components/AudioPlayer.vue'
 import StarRating from '@/components/StarRating.vue'
@@ -19,6 +20,7 @@ const props = defineProps<{ card: Card | null; open: boolean; knownTags: TagWith
 const emit = defineEmits<{ close: []; saved: [Card]; deleted: [string] }>()
 
 const toasts = useToastStore()
+const confirm = useConfirmStore()
 
 const term = ref('')
 const definition = ref('')
@@ -155,7 +157,13 @@ async function removeClip(clipId: string) {
 
 async function remove() {
   if (!props.card) return
-  if (!confirm(`Delete "${props.card.term}"? You can restore it afterwards.`)) return
+  const ok = await confirm.ask({
+    title: `Delete "${props.card.term}"?`,
+    message: 'It moves to the deleted cards and can be restored afterwards.',
+    confirmLabel: 'Delete card',
+    tone: 'danger',
+  })
+  if (!ok) return
   try {
     await api.cards.remove(props.card.id)
     toasts.success('Card deleted.')
@@ -175,8 +183,17 @@ async function restore() {
   }
 }
 
-function tryClose() {
-  if (dirty.value && !confirm('Discard unsaved changes?')) return
+async function tryClose() {
+  if (dirty.value) {
+    const ok = await confirm.ask({
+      title: 'Discard unsaved changes?',
+      message: 'The edits to this card will be lost.',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
+    })
+    if (!ok) return
+  }
   emit('close')
 }
 

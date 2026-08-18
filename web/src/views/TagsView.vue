@@ -2,12 +2,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { ApiError, api } from '@/api/client'
 import { relativeTime, tagColor } from '@/composables/format'
+import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import EmptyState from '@/components/EmptyState.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import type { TagWithCount } from '@/api/types'
 
 const toasts = useToastStore()
+const confirm = useConfirmStore()
 
 const tags = ref<TagWithCount[]>([])
 const loading = ref(true)
@@ -75,10 +77,15 @@ async function saveEdit(tag: TagWithCount) {
 }
 
 async function remove(tag: TagWithCount) {
-  const warning = tag.card_count
-    ? `Delete "${tag.name}"? It will be removed from ${tag.card_count} card${tag.card_count === 1 ? '' : 's'}; the cards stay.`
-    : `Delete "${tag.name}"?`
-  if (!confirm(warning)) return
+  const ok = await confirm.ask({
+    title: `Delete "${tag.name}"?`,
+    message: tag.card_count
+      ? `It will be removed from ${tag.card_count} card${tag.card_count === 1 ? '' : 's'}. The cards themselves stay.`
+      : undefined,
+    confirmLabel: 'Delete tag',
+    tone: 'danger',
+  })
+  if (!ok) return
   try {
     await api.tags.remove(tag.id)
     await load()
