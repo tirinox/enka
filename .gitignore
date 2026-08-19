@@ -225,3 +225,31 @@ node_modules/
 web/dist/
 web/.vite/
 web/*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# macOS client (Swift)
+# ---------------------------------------------------------------------------
+
+# SwiftPM build products and resolved dependency graph. `build/` is already
+# ignored above by the Python section, which is where Scripts/bundle.sh puts
+# Enka.app — named here too so the reason is written down next to the rest.
+macos/.build/
+macos/.swiftpm/
+macos/build/
+macos/Package.resolved
+macos/*.xcodeproj/
+macos/*.xcworkspace/
+
+# Xcode, for anyone who opens the package in it rather than building from the
+# command line. Xcode writes per-user state into the package directory.
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Finder and friends.
+.DS_Store

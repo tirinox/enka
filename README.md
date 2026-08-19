@@ -9,14 +9,13 @@ word when you meet it, fill in the meaning later. Scheduling uses
 [FSRS](https://github.com/open-spaced-repetition/py-fsrs), the algorithm behind
 modern Anki.
 
-This repository will eventually hold three parts. The backend and the web
-client exist; the macOS client comes next and will talk to the same API.
+Three parts, all talking to the same API.
 
 ```
 enka/
 ├── backend/     ← FastAPI + Postgres
 ├── web/         ← Vue 3 client
-└── macos/       ← later
+└── macos/       ← a panel that lives in the notch
 ```
 
 ## Quick start
@@ -50,6 +49,17 @@ npm run dev --prefix web
 <http://localhost:5273>, then sign in with the secret above. Studying is
 keyboard-first: `Space` reveals, `1`–`4` rate, `U` undoes. See
 [`web/README.md`](web/README.md) for the rest.
+
+## The macOS app
+
+```bash
+make mac-run
+```
+
+No window and no Dock icon: the app puts the due count in the menu bar and
+unfolds a panel out of the notch when the pointer rests there. The same four
+keys study a card; `Add` captures a word in one line while you are reading
+something else. See [`macos/README.md`](macos/README.md).
 
 ## How auth works
 

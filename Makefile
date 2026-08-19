@@ -161,6 +161,32 @@ restore: ## Restore a dump: make restore f=backups/enka-....sql
 	@[ -n "$(f)" ] || { echo 'usage: make restore f=backups/enka-20260818-120000.sql'; exit 1; }
 	$(DC) exec -T db psql -U $(call env_get,POSTGRES_USER) -d $(call env_get,POSTGRES_DB) < $(f)
 
+# ----------------------------------------------------------- macOS app -----
+# All of these are no-ops off a Mac; they shell out to SwiftPM, which is part of
+# the Xcode command line tools.
+
+.PHONY: mac
+mac: ## Build the macOS app into macos/build/Enka.app
+	cd macos && ./Scripts/bundle.sh release
+
+.PHONY: mac-run
+mac-run: mac ## Build the macOS app and (re)start it
+	-pkill -f 'Enka.app/Contents/MacOS/Enka' 2>/dev/null || true
+	open macos/build/Enka.app
+	@echo "Enka is in the menu bar — hover the notch."
+
+.PHONY: mac-dev
+mac-dev: ## Compile the macOS app without bundling it (fast type-check loop)
+	cd macos && swift build
+
+.PHONY: mac-icon
+mac-icon: ## Re-render macos/Resources/AppIcon.icns from Scripts/make-icon.swift
+	cd macos && swift Scripts/make-icon.swift Resources/AppIcon.icns
+
+.PHONY: mac-clean
+mac-clean: ## Remove the macOS build products
+	rm -rf macos/.build macos/build
+
 # ---------------------------------------------------------------- misc -----
 .PHONY: lock
 lock: ## Refresh backend/uv.lock after editing pyproject.toml
