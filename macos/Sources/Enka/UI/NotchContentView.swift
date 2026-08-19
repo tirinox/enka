@@ -86,6 +86,12 @@ struct NotchContentView: View {
             EmptyView()
         case .search:
             SearchCounter(search: vm.search)
+        case .tags:
+            if !vm.tagStore.tags.isEmpty {
+                Text(vm.tagStore.tags.count == 1 ? "1 tag" : "\(vm.tagStore.tags.count) tags")
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundStyle(Theme.tertiary)
+            }
         case .stats:
             if let streak = vm.stats.stats?.currentStreakDays, streak > 0 {
                 Text("\(streak)-day streak")
@@ -145,6 +151,8 @@ struct NotchContentView: View {
                 AddPane(vm: vm)
             case .search:
                 SearchPane(vm: vm)
+            case .tags:
+                TagsPane(vm: vm)
             case .stats:
                 StatsPane(stats: vm.stats)
             case .settings:

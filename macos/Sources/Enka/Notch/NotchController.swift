@@ -280,6 +280,11 @@ final class NotchController {
                 vm.search.clear()
                 return true
             }
+            if vm.tab == .tags, vm.tagStore.editing != nil || vm.tagStore.confirmingDelete != nil {
+                vm.tagStore.editing = nil
+                vm.tagStore.confirmingDelete = nil
+                return true
+            }
             vm.wantsKeyboard = false
             setOpen(false)
             pointer.setInside(false)

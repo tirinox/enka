@@ -263,6 +263,43 @@ actor APIClient {
         try await send("tags")
     }
 
+    func createTag(name: String, color: String?) async throws -> Tag {
+        struct Body: Encodable {
+            let name: String
+            let color: String?
+        }
+        return try await send("tags", method: "POST", body: try encode(Body(name: name, color: color)))
+    }
+
+    /// `PATCH /tags/{id}` reads its payload with `exclude_unset`, so a field
+    /// left out is a field left alone — and clearing a colour therefore means
+    /// sending `"color": null`, not sending nothing. Swift's `JSONEncoder`
+    /// drops nil optionals by default, which is exactly the wrong default here,
+    /// so the two intentions are held apart by a double optional and written
+    /// out by hand.
+    func updateTag(id: String, name: String?, color: String??) async throws -> Tag {
+        struct Body: Encodable {
+            let name: String?
+            let color: String??
+
+            enum CodingKeys: String, CodingKey { case name, color }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(name, forKey: .name)
+                // Present-but-nil encodes as JSON null; absent stays absent.
+                if let color { try container.encode(color, forKey: .color) }
+            }
+        }
+        return try await send("tags/\(id)", method: "PATCH", body: try encode(Body(name: name, color: color)))
+    }
+
+    func deleteTag(id: String) async throws {
+        // 204, so there is no body to decode — `raw` is asked directly rather
+        // than making every no-content endpoint invent a type to be empty in.
+        _ = try await raw("tags/\(id)", method: "DELETE")
+    }
+
     // Stats
 
     func stats() async throws -> StatsResponse {

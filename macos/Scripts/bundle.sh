@@ -50,7 +50,41 @@ if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
     cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi
 
-echo "==> ad-hoc signing"
+# Which identity signs the bundle.
+#
+# Ad-hoc by default, so a fresh clone builds with no setup at all. The cost is
+# paid at the keychain: an ad-hoc identity *is* the binary's hash, so every
+# rebuild looks to macOS like a different application asking for the same
+# keychain item — which is the "Enka wants to access key com.enka.app" dialog,
+# and why "Always Allow" does not stick past the next build. The same churn
+# makes `SMAppService` re-register the login item each time.
+#
+# Set CODESIGN_IDENTITY to the name of a code-signing certificate and the
+# identity stops moving: the keychain ACL is granted once and holds. A
+# self-signed certificate from Keychain Access is enough — no Apple Developer
+# account, no notarisation, because nothing here leaves this Mac.
+#
+#   security find-identity -v -p codesigning     # what you have
+#   CODESIGN_IDENTITY="Enka Dev" ./Scripts/bundle.sh
+#
+# `make mac` also reads MACOS_CODESIGN_IDENTITY out of the repository's .env,
+# which is the place to put it so it survives.
+IDENTITY="${CODESIGN_IDENTITY:--}"
+
+if [ "$IDENTITY" != "-" ]; then
+    # Checked before signing rather than after failing: codesign's own error for
+    # a name it cannot find is "no identity found", which reads like the
+    # keychain is broken rather than like a typo.
+    if ! security find-identity -v -p codesigning | grep -qF "$IDENTITY"; then
+        echo "!!! no code-signing identity matching \"$IDENTITY\"" >&2
+        echo "    available:" >&2
+        security find-identity -v -p codesigning | sed 's/^/    /' >&2
+        exit 1
+    fi
+    echo "==> signing as \"$IDENTITY\""
+else
+    echo "==> ad-hoc signing"
+fi
 # Extended attributes come off first. iCloud hangs com.apple.FinderInfo on
 # files, and codesign refuses to sign anything carrying one — "resource fork,
 # Finder information, or similar detritus not allowed". The Desktop folder syncs
@@ -62,7 +96,7 @@ xattr -cr "$APP"
 # line and returns zero leaves a bundle in build/ that codesign describes as
 # "not signed at all" — and the only symptom is keychain prompts coming back,
 # for somebody who has already installed it.
-codesign --force --deep --sign - "$APP" || {
+codesign --force --deep --sign "$IDENTITY" "$APP" || {
     echo "!!! codesign could not sign the bundle — see above" >&2
     exit 1
 }

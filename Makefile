@@ -162,17 +162,34 @@ restore: ## Restore a dump: make restore f=backups/enka-....sql
 	$(DC) exec -T db psql -U $(call env_get,POSTGRES_USER) -d $(call env_get,POSTGRES_DB) < $(f)
 
 # ----------------------------------------------------------- macOS app -----
+MAC_APP     := macos/build/Enka.app
+MAC_INSTALL := /Applications/Enka.app
+
 # All of these are no-ops off a Mac; they shell out to SwiftPM, which is part of
 # the Xcode command line tools.
 
 .PHONY: mac
 mac: ## Build the macOS app into macos/build/Enka.app
-	cd macos && ./Scripts/bundle.sh release
+	@# The signing identity comes from the environment if it is there, and from
+	@# .env otherwise, so it can be set once and forgotten. Empty means ad-hoc —
+	@# see the comment in macos/Scripts/bundle.sh for what that costs.
+	@identity="$${CODESIGN_IDENTITY:-$(call env_get,MACOS_CODESIGN_IDENTITY)}"; \
+	 cd macos && CODESIGN_IDENTITY="$$identity" ./Scripts/bundle.sh release
+
+.PHONY: mac-identity
+mac-identity: ## List code-signing identities usable for MACOS_CODESIGN_IDENTITY
+	@security find-identity -v -p codesigning || true
+	@echo
+	@echo "Put one in .env as:  MACOS_CODESIGN_IDENTITY=<the name in quotes above>"
+	@echo "Nothing there? Keychain Access → Certificate Assistant → Create a"
+	@echo "Certificate: any name, type 'Code Signing', self-signed. That is enough —"
+	@echo "the app never leaves this Mac, so it needs no Apple certificate."
 
 .PHONY: mac-run
-mac-run: mac ## Build the macOS app and (re)start it
-	-pkill -f 'Enka.app/Contents/MacOS/Enka' 2>/dev/null || true
-	open macos/build/Enka.app
+mac-run: mac ## Build the macOS app and (re)start it from macos/build
+	-@pkill -f 'Enka.app/Contents/MacOS/Enka' 2>/dev/null || true
+	@sleep 1
+	open "$(MAC_APP)"
 	@echo "Enka is in the menu bar — hover the notch."
 
 .PHONY: mac-dev
@@ -182,6 +199,26 @@ mac-dev: ## Compile the macOS app without bundling it (fast type-check loop)
 .PHONY: mac-icon
 mac-icon: ## Re-render macos/Resources/AppIcon.icns from Scripts/make-icon.swift
 	cd macos && swift Scripts/make-icon.swift Resources/AppIcon.icns
+
+.PHONY: mac-install
+mac-install: mac ## Build and install Enka.app into /Applications, then run it
+	@# Quit the running copy first. Replacing a bundle underneath a live
+	@# process leaves it running from a path that no longer exists, and the
+	@# next code-signing check it makes — the keychain does one — fails.
+	-@pkill -f '$(MAC_INSTALL)/Contents/MacOS/Enka' 2>/dev/null || true
+	-@pkill -f '$(MAC_APP)/Contents/MacOS/Enka' 2>/dev/null || true
+	@sleep 1
+	rm -rf "$(MAC_INSTALL)"
+	cp -R "$(MAC_APP)" "$(MAC_INSTALL)"
+	open "$(MAC_INSTALL)"
+	@echo "Installed $(MAC_INSTALL) — it is in the menu bar."
+
+.PHONY: mac-uninstall
+mac-uninstall: ## Quit and remove /Applications/Enka.app
+	-@pkill -f '$(MAC_INSTALL)/Contents/MacOS/Enka' 2>/dev/null || true
+	rm -rf "$(MAC_INSTALL)"
+	@echo "Removed $(MAC_INSTALL). The secret is still in your keychain —"
+	@echo "sign out from the app's Settings tab first if you want it gone."
 
 .PHONY: mac-clean
 mac-clean: ## Remove the macOS build products

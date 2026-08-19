@@ -14,7 +14,6 @@ final class CaptureStore: ObservableObject {
     @Published var definition = ""
     @Published var selectedTags: Set<String> = []
 
-    @Published private(set) var tags: [Tag] = []
     /// What the collection already has for what is being typed. The point of
     /// the endpoint, and the point of this tab: half of adding a word is
     /// finding out you added it in March.
@@ -35,16 +34,6 @@ final class CaptureStore: ObservableObject {
 
     var canSave: Bool {
         !term.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
-    }
-
-    /// Tags are read on the way into the tab rather than kept fresh: they change
-    /// from the web client, once in a while, and a panel that polls them is
-    /// polling for nothing most days.
-    func refreshTags() {
-        Task {
-            guard let fetched = try? await session.run({ try await $0.tags() }) else { return }
-            tags = fetched.sorted { ($0.cardCount ?? 0) > ($1.cardCount ?? 0) }
-        }
     }
 
     /// Runs on every keystroke, but only after the typing stops. Two reasons,
@@ -108,6 +97,15 @@ final class CaptureStore: ObservableObject {
             }
             isSaving = false
         }
+    }
+
+    /// Keeps the selection honest across an edit made on the tags tab. A name
+    /// picked here and then renamed there would otherwise be sent with the next
+    /// card, which creates the old tag again — undoing the rename by the back
+    /// door.
+    func reconcile(with tags: [Tag]) {
+        let names = Set(tags.map(\.name))
+        selectedTags.formIntersection(names)
     }
 
     /// Clears both fields. Escape's job, and the reason Escape does not close

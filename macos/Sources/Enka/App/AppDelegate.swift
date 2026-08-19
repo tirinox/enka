@@ -141,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add(to: menu, "Study", tab: .study, key: "s")
         add(to: menu, "Add a word", tab: .add, key: "n")
         add(to: menu, "Search", tab: .search, key: "f")
+        add(to: menu, "Tags", tab: .tags, key: "t")
         add(to: menu, "Progress", tab: .stats, key: "")
         menu.addItem(.separator())
         add(to: menu, "Settings", tab: .settings, key: ",")

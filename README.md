@@ -59,7 +59,9 @@ make mac-run
 No window and no Dock icon: the app puts the due count in the menu bar and
 unfolds a panel out of the notch when the pointer rests there. The same four
 keys study a card; `Add` captures a word in one line while you are reading
-something else. See [`macos/README.md`](macos/README.md).
+something else; `Tags` is the one place it edits the collection. `make
+mac-install` puts it in `/Applications`. See
+[`macos/README.md`](macos/README.md).
 
 ## How auth works
 

@@ -13,6 +13,10 @@ import SwiftUI
 struct AddPane: View {
     @ObservedObject var vm: NotchViewModel
     @ObservedObject private var capture: CaptureStore
+    /// Observed directly, not read through the view model: the view model
+    /// deliberately does not forward this pane's keystroke-driven store, and
+    /// the chips have to notice a tag created on the tags tab.
+    @ObservedObject private var tagStore: TagStore
 
     @FocusState private var focus: Field?
     private enum Field { case term, definition }
@@ -20,6 +24,7 @@ struct AddPane: View {
     init(vm: NotchViewModel) {
         self.vm = vm
         self.capture = vm.capture
+        self.tagStore = vm.tagStore
     }
 
     var body: some View {
@@ -158,14 +163,14 @@ struct AddPane: View {
 
     private var footer: some View {
         HStack(spacing: 6) {
-            if capture.tags.isEmpty {
+            if tagStore.tags.isEmpty {
                 Text("No tags yet")
                     .font(.system(size: 10))
                     .foregroundStyle(Theme.tertiary)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 5) {
-                        ForEach(capture.tags.prefix(12)) { tag in
+                        ForEach(tagStore.byUse.prefix(12)) { tag in
                             TagToggle(
                                 tag: tag,
                                 selected: capture.selectedTags.contains(tag.name)
