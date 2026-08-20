@@ -30,6 +30,17 @@ RUN groupadd --gid 1000 enka \
     && chown -R enka:enka /data
 
 COPY --from=deps --chown=enka:enka /app/.venv /app/.venv
+
+# Bake the two default Piper voices (see app/services/tts.py) into the image
+# so auto-generated pronunciation works with zero setup. ~60MB total, fetched
+# once at build time from the same place `piper.download_voices` always
+# pulls from. Not a volume: these are static and only change if the
+# Dockerfile's voice list does.
+RUN mkdir -p /data/tts-voices \
+    && python -m piper.download_voices en_US-lessac-medium ru_RU-irina-medium \
+        --download-dir /data/tts-voices \
+    && chown -R enka:enka /data/tts-voices
+
 COPY --chown=enka:enka . /app
 
 RUN chmod +x /app/docker-entrypoint.sh

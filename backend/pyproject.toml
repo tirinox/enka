@@ -18,6 +18,12 @@ dependencies = [
     # Free Spaced Repetition Scheduler. Pure Python; the `optimizer` extra
     # (torch/numpy/pandas) is deliberately not installed.
     "fsrs>=6.3,<7",
+    # Local neural TTS for auto-generated term audio. onnxruntime is the only
+    # heavy dependency it pulls in at inference time — no torch.
+    "piper-tts>=1.7,<2",
+    # Language ID for picking a voice. Ships its own compact model, nothing
+    # to download separately.
+    "py3langid>=0.3,<1",
 ]
 
 [project.optional-dependencies]

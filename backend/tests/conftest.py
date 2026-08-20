@@ -49,6 +49,10 @@ def _configure_settings(tmp_path_factory) -> None:
     settings.max_audio_mb = 1
     # Deterministic intervals — fuzz would make interval assertions flaky.
     settings.fsrs_enable_fuzzing = False
+    # Off by default: real Piper inference needs voice model files this repo
+    # doesn't ship, and card-creation tests shouldn't pay for synthesis they
+    # aren't testing. test_tts.py turns it back on with stubbed internals.
+    settings.tts_enabled = False
 
 
 @pytest.fixture(autouse=True)

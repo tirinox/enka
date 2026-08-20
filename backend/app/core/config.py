@@ -46,6 +46,31 @@ class Settings(BaseSettings):
     audio_dir: str = "/data/audio"
     max_audio_mb: int = 25
 
+    # --- TTS (auto-generated term audio) ------------------------------------
+    tts_enabled: bool = True
+    tts_model_dir: str = "/data/tts-voices"
+    #: Language code -> Piper voice basename (relative to tts_model_dir; loads
+    #: ``{name}.onnx`` + ``{name}.onnx.json``). Also the set of languages
+    #: language-detection is allowed to guess — add a language by dropping
+    #: the two voice files in and adding an entry here, no code change.
+    tts_voice_map: dict[str, str] = {
+        "en": "en_US-lessac-medium",
+        "ru": "ru_RU-irina-medium",
+    }
+    #: Below this confidence, detect_language() returns None rather than
+    #: guess. Meaningful only because detection is restricted to
+    #: tts_voice_map's languages — see app/services/tts.py.
+    tts_min_confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+
+    @field_validator("tts_voice_map", mode="before")
+    @classmethod
+    def _parse_voice_map(cls, value: object) -> object:
+        """Accepts ``en:en_US-lessac-medium,ru:ru_RU-irina-medium`` as well as JSON."""
+        if isinstance(value, str) and not value.strip().startswith("{"):
+            pairs = (part.split(":", 1) for part in value.split(",") if part.strip())
+            return {k.strip(): v.strip() for k, v in pairs}
+        return value
+
     # --- FSRS --------------------------------------------------------------
     fsrs_desired_retention: float = Field(default=0.9, gt=0.0, lt=1.0)
     fsrs_maximum_interval: int = Field(default=36500, gt=0)

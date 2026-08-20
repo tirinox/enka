@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +23,7 @@ from app.schemas.card import (
 from app.schemas.common import CardSort, SortOrder, TagMode
 from app.services import cards as card_service
 from app.services import search as search_service
+from app.services import tts as tts_service
 
 router = APIRouter(prefix="/cards", tags=["cards"])
 
@@ -125,7 +126,13 @@ async def search(
 
 
 @router.post("", response_model=CardOut, status_code=status.HTTP_201_CREATED, summary="Add a card")
-async def create_card(payload: CardCreate, owner: OwnerDep, session: SessionDep) -> CardOut:
+async def create_card(
+    payload: CardCreate,
+    owner: OwnerDep,
+    session: SessionDep,
+    storage: StorageDep,
+    background_tasks: BackgroundTasks,
+) -> CardOut:
     card = Card(
         owner_id=owner.id,
         term=payload.term,
@@ -142,6 +149,11 @@ async def create_card(payload: CardCreate, owner: OwnerDep, session: SessionDep)
     session.add(card)
     await session.commit()
     await session.refresh(card, ["tags", "audio_clips"])
+    # Runs after the response is sent, on this same session — see the note
+    # in app/services/tts.py. The card in this response never carries the
+    # generated clip; a client sees it on its next fetch, same as it would
+    # for any clip attached after the fact.
+    background_tasks.add_task(tts_service.generate_term_clip, session, storage, card)
     return card_service.card_to_out(card)
 
 
@@ -156,6 +168,8 @@ async def bulk_create(
     payload: CardBulkCreate,
     owner: OwnerDep,
     session: SessionDep,
+    storage: StorageDep,
+    background_tasks: BackgroundTasks,
     skip_duplicates: Annotated[
         bool, Query(description="Silently skip terms that already exist (case-insensitive).")
     ] = True,
@@ -204,6 +218,9 @@ async def bulk_create(
     await session.commit()
     for card in created:
         await session.refresh(card, ["tags", "audio_clips"])
+        # Scheduled one at a time — BackgroundTasks runs them in sequence,
+        # so a 1000-card import never pins every core at once.
+        background_tasks.add_task(tts_service.generate_term_clip, session, storage, card)
 
     return BulkCreateResult(
         created=[card_service.card_to_out(c) for c in created],
