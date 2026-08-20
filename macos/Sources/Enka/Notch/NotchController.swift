@@ -21,6 +21,13 @@ final class NotchController {
     private var viewModel: NotchViewModel?
     private let pointer = PointerWatcher()
     private var closeActiveRectWork: DispatchWorkItem?
+    /// The deferred check `scheduleCollapseIfPointerAway` runs. Stored so a
+    /// newer one can cancel an older one still in flight — losing and
+    /// regaining the keyboard in quick succession (a tab switch, a refocused
+    /// field) used to leave several of these stacked up, each free to fire
+    /// later on stale information and silently re-arm the hover-away timer
+    /// via `pointer.setInside`, which is what made closing feel unpredictable.
+    private var pointerAwayWork: DispatchWorkItem?
     private var cancellables = Set<AnyCancellable>()
     /// Monotonic stamp for the deferred half of closing: any newer open or
     /// close outdates the one still in flight.
@@ -124,6 +131,7 @@ final class NotchController {
         pointer.stop()
         viewModel?.stop()
         closeActiveRectWork?.cancel()
+        pointerAwayWork?.cancel()
         cancellables.removeAll()
         panel?.acceptsKeyboard = false
         panel?.orderOut(nil)
@@ -184,6 +192,10 @@ final class NotchController {
         // for is the whole complaint. Staying put is what asks for the panel.
         pointer.openDelay = geometry.isPhysical ? 0.05 : 0.3
         pointer.isPanelOpen = { [weak vm] in vm?.isOpen ?? false }
+        // A card is read with the mouse wherever it happened to land, not kept
+        // hovering the panel — closing on the pointer here is closing on
+        // nothing. Study mode is closed by its own button instead.
+        pointer.pinned = { [weak vm] in vm?.tab == .study }
         pointer.onChange = { [weak self] inside in
             self?.setOpen(inside)
         }
@@ -228,6 +240,11 @@ final class NotchController {
                 MainActor.assumeIsolated { self?.viewModel?.wantsKeyboard = false }
             }
             .store(in: &cancellables)
+
+        // Study's own close button: the tab the pointer no longer closes has
+        // to give the keyboard-and-mouse-free way back that a hover normally
+        // is everywhere else.
+        vm.requestClose = { [weak self] in self?.closePanel() }
 
         vm.start()
 
@@ -285,9 +302,7 @@ final class NotchController {
                 vm.tagStore.confirmingDelete = nil
                 return true
             }
-            vm.wantsKeyboard = false
-            setOpen(false)
-            pointer.setInside(false)
+            closePanel()
             return true
         }
         guard vm.tab == .study,
@@ -318,9 +333,23 @@ final class NotchController {
 
     // MARK: - Open / close
 
+    /// The deliberate way to close, independent of the pointer: Escape, and
+    /// the close button study mode carries because the pointer is pinned
+    /// there and cannot.
+    private func closePanel() {
+        viewModel?.wantsKeyboard = false
+        setOpen(false)
+        pointer.setInside(false)
+    }
+
     /// Hands the keyboard to the panel, or gives it back.
     private func setKeyboard(_ wants: Bool) {
         if wants {
+            // Regaining the keyboard means the pointer-away check scheduled
+            // the last time it was lost no longer applies — let it run and it
+            // would judge "away" against whatever the mouse is doing now,
+            // possibly closing a panel the user just came back to.
+            pointerAwayWork?.cancel()
             setOpen(true)
             pointer.setInside(true)
         }
@@ -378,8 +407,22 @@ final class NotchController {
     }
 
     private func scheduleCollapseIfPointerAway() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+        // Cancel-before-reschedule, same as `closeActiveRectWork`: without
+        // this, losing and regaining the keyboard inside one 0.6s window left
+        // the earlier check running too. It would fire later on stale
+        // information and call `pointer.setInside`, which resets the hover
+        // debounce and postpones a close the user was already expecting —
+        // the panel would just sit there with no obvious reason why.
+        pointerAwayWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
             guard let self, let vm = self.viewModel else { return }
+            // Study is pinned open: this check is exactly the pointer-based
+            // close `PointerWatcher.pinned` turns off there, just reached by
+            // losing the keyboard instead of by hovering away — arriving at
+            // Study from a typing tab drops the keyboard the same way leaving
+            // the app does. Skip it rather than let it sneak the same close
+            // back in by a side door.
+            guard vm.tab != .study else { return }
             // Resync either way. A pointer that is still on the panel has to be
             // recorded as inside, or hover tracking stays convinced it left and
             // the panel hangs open until the notch is touched again.
@@ -387,6 +430,8 @@ final class NotchController {
             self.pointer.setInside(!away)
             if away { self.setOpen(false) }
         }
+        pointerAwayWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
     }
 
     /// Re-cuts both rects for the body currently on screen.

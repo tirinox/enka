@@ -80,6 +80,19 @@ struct StudyPane: View {
                 .buttonStyle(.plain)
                 .help("Play the audio  (R)")
             }
+
+            // A card is read with the mouse wherever it landed, not kept
+            // hovering the panel, so hovering away does not close this tab —
+            // see `PointerWatcher.pinned`. This is the way back that gives.
+            Button {
+                vm.requestClose()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Close  (esc)")
         }
         .frame(height: 20)
     }

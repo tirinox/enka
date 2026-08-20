@@ -45,6 +45,13 @@ final class PointerWatcher {
     var onChange: ((Bool) -> Void)?
     var onInteractiveChange: ((Bool) -> Void)?
 
+    /// While this is true and the panel is already open, the pointer leaving
+    /// is not a close. Study cards are read with the mouse parked wherever it
+    /// last was, often nowhere near the panel — closing that mid-read is the
+    /// one thing worse than not closing at all. Study mode is closed by its
+    /// own button instead.
+    var pinned: () -> Bool = { false }
+
     private(set) var isInside = false
     private var timer: Timer?
     private var awaitingSince: Date?
@@ -129,6 +136,16 @@ final class PointerWatcher {
         }
 
         let inside = (isInside ? closeRect : openRect).contains(point)
+
+        // Pinned only matters once already open: opening still needs the
+        // pointer, even on a tab that will refuse to let it close. `isInside`
+        // is left exactly as it is — untouched rather than forced true — so
+        // unpinning resumes from a state that still agrees with reality
+        // instead of a close that was merely deferred coming due at once.
+        if isInside, pinned() {
+            awaitingSince = nil
+            return
+        }
 
         // Whether the panel is open and where the pointer is are two separate
         // facts, and only one of them is tracked here. They are supposed to

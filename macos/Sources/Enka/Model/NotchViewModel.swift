@@ -80,6 +80,11 @@ final class NotchViewModel: ObservableObject {
     /// showing, so a half-typed card survives and the panel is free to collapse.
     @Published var wantsKeyboard = false
 
+    /// Set by the controller, called by the study tab's close button. The
+    /// pointer is pinned open there, so this is the one way back besides
+    /// Escape.
+    var requestClose: () -> Void = {}
+
     let geometry: NotchGeometry
     let session: Session
     let audio: AudioPlayback
