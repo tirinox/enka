@@ -110,6 +110,11 @@ downgrade: ## Roll back one migration
 history: ## Show migration history
 	$(DC) exec api alembic history --indicate-current
 
+# ----------------------------------------------------------- maintenance ---
+.PHONY: backfill-tts
+backfill-tts: ## Generate term audio for cards that predate auto-gen. args="--dry-run" or args="--limit 20"
+	$(DC) exec api python -m app.scripts.backfill_term_audio $(args)
+
 # ------------------------------------------------------------- quality ----
 .PHONY: test
 test: ## Run the test suite

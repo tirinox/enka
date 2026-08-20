@@ -3,9 +3,10 @@
 Real Piper inference needs voice model files this repo doesn't ship, so every
 test that exercises the orchestration replaces the two Piper touchpoints
 (`_load_voice`, `_synthesize_wav_bytes`) with fakes via the `stub_piper`
-fixture. `test_missing_voice_model_file_skips_clip_generation` is the
-exception — it runs the real `_load_voice` against an empty directory, to
-prove the "no model file" path is exercised without needing real model bytes.
+fixture (conftest.py — shared with test_backfill_term_audio.py).
+`test_missing_voice_model_file_skips_clip_generation` is the exception — it
+runs the real `_load_voice` against an empty directory, to prove the "no
+model file" path is exercised without needing real model bytes.
 """
 
 from __future__ import annotations
@@ -14,16 +15,6 @@ import pytest
 
 from app.core.config import settings
 from app.services import tts as tts_service
-
-
-@pytest.fixture(autouse=True)
-def _clear_voice_cache():
-    """`_load_voice` is process-global lru_cache'd by language code; tests
-    that vary `tts_model_dir` for the same language would otherwise see a
-    stale cached result from an earlier test."""
-    tts_service._load_voice.cache_clear()
-    yield
-    tts_service._load_voice.cache_clear()
 
 
 # ------------------------------------------------------------ detection ----
@@ -57,25 +48,6 @@ def test_detect_language_respects_the_confidence_floor(monkeypatch):
 
 
 # --------------------------------------------------------- orchestration ---
-class _FakeVoice:
-    """Stands in for a loaded PiperVoice — no real model file needed."""
-
-
-@pytest.fixture
-def stub_piper(monkeypatch, wav_bytes):
-    monkeypatch.setattr(settings, "tts_enabled", True)
-
-    def fake_load_voice(lang: str):
-        return _FakeVoice() if lang in settings.tts_voice_map else None
-
-    def fake_synthesize(voice, text: str) -> bytes:
-        assert isinstance(voice, _FakeVoice)
-        return wav_bytes
-
-    monkeypatch.setattr(tts_service, "_load_voice", fake_load_voice)
-    monkeypatch.setattr(tts_service, "_synthesize_wav_bytes", fake_synthesize)
-
-
 async def test_tts_is_off_by_default(client):
     """Everything else in the suite relies on this."""
     response = await client.post("/api/v1/cards", json={"term": "hello"})

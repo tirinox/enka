@@ -24,6 +24,8 @@ dependencies = [
     # Language ID for picking a voice. Ships its own compact model, nothing
     # to download separately.
     "py3langid>=0.3,<1",
+    # Progress bar for the backfill script (app/scripts/backfill_term_audio.py).
+    "tqdm>=4.66,<5",
 ]
 
 [project.optional-dependencies]

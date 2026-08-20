@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import functools
+import json
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 PLACEHOLDER_SECRETS = {"change-me", "change-me-too", "change-me-as-well", ""}
 
@@ -53,7 +55,10 @@ class Settings(BaseSettings):
     #: ``{name}.onnx`` + ``{name}.onnx.json``). Also the set of languages
     #: language-detection is allowed to guess — add a language by dropping
     #: the two voice files in and adding an entry here, no code change.
-    tts_voice_map: dict[str, str] = {
+    #: NoDecode: pydantic-settings otherwise JSON-decodes any env-sourced
+    #: dict/list field before validators run, which would reject the plain
+    #: `en:voice,ru:voice` syntax below with a raw JSONDecodeError.
+    tts_voice_map: Annotated[dict[str, str], NoDecode] = {
         "en": "en_US-lessac-medium",
         "ru": "ru_RU-irina-medium",
     }
@@ -65,9 +70,15 @@ class Settings(BaseSettings):
     @field_validator("tts_voice_map", mode="before")
     @classmethod
     def _parse_voice_map(cls, value: object) -> object:
-        """Accepts ``en:en_US-lessac-medium,ru:ru_RU-irina-medium`` as well as JSON."""
-        if isinstance(value, str) and not value.strip().startswith("{"):
-            pairs = (part.split(":", 1) for part in value.split(",") if part.strip())
+        """Accepts ``en:en_US-lessac-medium,ru:ru_RU-irina-medium`` as well as
+        JSON. NoDecode (see the field above) means pydantic-settings no
+        longer JSON-decodes this field on its own, so a JSON string has to be
+        handled here too, not just the plain comma/colon syntax."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith("{"):
+                return json.loads(stripped)
+            pairs = (part.split(":", 1) for part in stripped.split(",") if part.strip())
             return {k.strip(): v.strip() for k, v in pairs}
         return value
 

@@ -225,3 +225,44 @@ def card_factory(client: AsyncClient):
 @pytest.fixture
 def new_uuid():
     return lambda: str(uuid.uuid4())
+
+
+# ---------------------------------------------------------------- tts ------
+@pytest.fixture(autouse=True)
+def _clear_voice_cache():
+    """`tts._load_voice` is process-global lru_cache'd by language code;
+    tests that vary `tts_model_dir` for the same language would otherwise
+    see a stale cached result from an earlier test."""
+    from app.services import tts as tts_service
+
+    tts_service._load_voice.cache_clear()
+    yield
+    tts_service._load_voice.cache_clear()
+
+
+class _FakePiperVoice:
+    """Stands in for a loaded PiperVoice — no real model file needed."""
+
+
+@pytest.fixture
+def stub_piper(monkeypatch, wav_bytes):
+    """Enables TTS and replaces the two Piper touchpoints with fakes.
+
+    Real Piper inference needs voice model files this repo doesn't ship, so
+    tests exercise the orchestration (language detection -> voice lookup ->
+    synthesis -> storage -> AudioClip row) without calling into onnxruntime.
+    """
+    from app.core.config import settings
+    from app.services import tts as tts_service
+
+    monkeypatch.setattr(settings, "tts_enabled", True)
+
+    def fake_load_voice(lang: str):
+        return _FakePiperVoice() if lang in settings.tts_voice_map else None
+
+    def fake_synthesize(voice, text: str) -> bytes:
+        assert isinstance(voice, _FakePiperVoice)
+        return wav_bytes
+
+    monkeypatch.setattr(tts_service, "_load_voice", fake_load_voice)
+    monkeypatch.setattr(tts_service, "_synthesize_wav_bytes", fake_synthesize)

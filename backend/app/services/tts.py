@@ -84,30 +84,32 @@ def _synthesize_wav_bytes(voice: PiperVoice, text: str) -> bytes:
     return buffer.getvalue()
 
 
-async def generate_term_clip(session: AsyncSession, storage: Storage, card: Card) -> None:
+async def generate_term_clip(session: AsyncSession, storage: Storage, card: Card) -> bool:
     """Synthesizes and stores a term-side clip for `card`, best-effort.
 
     Meant to run as a ``BackgroundTasks`` entry scheduled from the card-create
     endpoints, reusing the same request session and storage — see the
     `Depends`-with-yield / background-task ordering note in
-    ``app/api/v1/cards.py``. Never raises.
+    ``app/api/v1/cards.py``. Also the unit the backfill script
+    (``app/scripts/backfill_term_audio.py``) drives directly, one card at a
+    time. Never raises; returns whether a clip was actually created.
     """
     if not settings.tts_enabled:
-        return
+        return False
     lang = detect_language(card.term)
     if lang is None:
-        return
+        return False
 
     try:
         voice = await asyncio.to_thread(_load_voice, lang)
         if voice is None:
-            return
+            return False
         wav_bytes = await asyncio.to_thread(_synthesize_wav_bytes, voice, card.term)
     except Exception:
         logger.exception("tts: synthesis failed for card %s (lang=%s)", card.id, lang)
-        return
+        return False
     if not wav_bytes:
-        return
+        return False
 
     clip_id = uuid.uuid4()
     storage_key = f"{card.id}/{clip_id}.wav"
@@ -119,7 +121,7 @@ async def generate_term_clip(session: AsyncSession, storage: Storage, card: Card
         stored = await storage.save(storage_key, chunks(), max_bytes=settings.max_audio_bytes)
     except Exception:
         logger.exception("tts: failed to store generated clip for card %s", card.id)
-        return
+        return False
 
     clip = AudioClip(
         id=clip_id,
@@ -139,3 +141,5 @@ async def generate_term_clip(session: AsyncSession, storage: Storage, card: Card
         logger.exception("tts: failed to save clip row for card %s", card.id)
         await session.rollback()
         await storage.delete(storage_key)
+        return False
+    return True
