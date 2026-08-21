@@ -193,11 +193,17 @@ export const api = {
       opts: { side?: string; limit?: number; threshold?: number } = {},
       signal?: AbortSignal,
     ) => request<SearchResponse>(`/cards/search${query({ q, ...opts })}`, { signal }),
-    /** Never persisted server-side — save the result yourself via `update()`. */
-    generateDefinition: (id: string, mode: DefinitionMode) =>
-      request<DefinitionGenerateResponse>(`/cards/${id}/definition/generate`, {
+  },
+
+  definitions: {
+    /** Not card-scoped — works on a term that hasn't been saved yet, which
+     * is what the Add flow needs. Never persisted server-side; save the
+     * result yourself via `cards.create()`/`cards.update()` if you want to
+     * keep it. */
+    generate: (term: string, mode: DefinitionMode) =>
+      request<DefinitionGenerateResponse>('/definitions/generate', {
         method: 'POST',
-        body: { mode },
+        body: { term, mode },
       }),
   },
 

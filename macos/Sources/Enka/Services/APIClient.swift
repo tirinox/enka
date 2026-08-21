@@ -274,12 +274,14 @@ actor APIClient {
         return try await send("cards/\(cardID)", method: "PATCH", body: try encode(Patch(definition: definition)))
     }
 
-    /// Never persisted server-side — the caller saves the result itself via
-    /// `update(cardID:definition:)` if it wants to keep it.
-    func generateDefinition(cardID: String, mode: DefinitionMode) async throws -> DefinitionGenerateResponse {
-        struct Body: Encodable { let mode: DefinitionMode }
+    /// Not card-scoped — works on a term that hasn't been saved yet, which is
+    /// what the Add tab needs. Never persisted server-side; the caller saves
+    /// the result itself (as the definition it's about to create, or via
+    /// `update(cardID:definition:)`) if it wants to keep it.
+    func generateDefinition(term: String, mode: DefinitionMode) async throws -> DefinitionGenerateResponse {
+        struct Body: Encodable { let term: String; let mode: DefinitionMode }
         return try await send(
-            "cards/\(cardID)/definition/generate", method: "POST", body: try encode(Body(mode: mode))
+            "definitions/generate", method: "POST", body: try encode(Body(term: term, mode: mode))
         )
     }
 

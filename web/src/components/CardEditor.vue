@@ -108,12 +108,15 @@ function removeTag(name: string) {
 }
 
 // --------------------------------------------------------- AI definition ---
-// Needs a card id, so — like audio — it only appears once saved. Never
+// Works on the typed term directly — not card-scoped — so it's available
+// on a brand-new, unsaved card exactly the same as an existing one. Never
 // writes to the card itself; the result just fills the field, same as
 // typing it would, and the normal Save button persists it.
 const defining = ref<DefinitionMode | null>(null)
 const askingNativeLanguage = ref(false)
 const nativeLanguageDraft = ref('')
+
+const canGenerate = computed(() => term.value.trim().length > 0 && defining.value === null)
 
 const translateLabel = computed(() => {
   const lang = authStore.owner?.native_language
@@ -121,11 +124,14 @@ const translateLabel = computed(() => {
 })
 
 async function generate(mode: DefinitionMode) {
-  if (!props.card) return
+  const typed = term.value.trim()
+  if (!typed) return
   defining.value = mode
   try {
-    const result = await api.cards.generateDefinition(props.card.id, mode)
-    definition.value = result.definition
+    const result = await api.definitions.generate(typed, mode)
+    // The term may have changed while a slow local model was still
+    // thinking — an answer for a word no longer on screen is dropped.
+    if (term.value.trim() === typed) definition.value = result.definition
   } catch (e) {
     if (e instanceof ApiError) toasts.error(e.message)
   } finally {
@@ -293,17 +299,17 @@ const srsLabel = computed(() => {
               <label class="label" for="def">
                 Definition <span class="faint">— optional, fill it in later</span>
               </label>
-              <div v-if="card" class="ai-actions">
+              <div class="ai-actions">
                 <button
                   class="btn btn-ghost btn-sm"
-                  :disabled="defining !== null"
+                  :disabled="!canGenerate"
                   @click="generate('same_language')"
                 >
                   {{ defining === 'same_language' ? 'Thinking…' : 'AI define' }}
                 </button>
                 <button
                   class="btn btn-ghost btn-sm"
-                  :disabled="defining !== null"
+                  :disabled="!canGenerate"
                   @click="onTranslateClick"
                 >
                   {{ defining === 'native_language' ? 'Thinking…' : translateLabel }}
