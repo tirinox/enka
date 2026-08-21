@@ -14,6 +14,7 @@ from app.core.errors import UnauthorizedError
 from app.core.security import TokenScope, decode_token
 from app.db.session import get_session
 from app.models.owner import Owner
+from app.services.ollama import OllamaClient
 from app.storage.local import LocalStorage
 
 bearer_scheme = HTTPBearer(auto_error=False, description="JWT from POST /api/v1/auth/token")
@@ -27,6 +28,16 @@ def get_storage() -> LocalStorage:
 
 
 StorageDep = Annotated[LocalStorage, Depends(get_storage)]
+
+
+@functools.lru_cache
+def get_ollama_client() -> OllamaClient:
+    return OllamaClient(
+        settings.ollama_base_url, settings.ollama_model, settings.ollama_timeout_seconds
+    )
+
+
+OllamaClientDep = Annotated[OllamaClient, Depends(get_ollama_client)]
 
 
 async def _owner_from_token(session: AsyncSession, token: str, scopes: tuple[TokenScope, ...]):

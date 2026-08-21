@@ -18,3 +18,7 @@ class Owner(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "owner"
 
     name: Mapped[str] = mapped_column(String(120), nullable=False, default="me")
+    #: ISO 639-1 code (e.g. "ru"). Nullable — unset until the owner picks one,
+    #: which the client prompts for the first time a translation is requested
+    #: rather than assuming a default (see app/services/definitions.py).
+    native_language: Mapped[str | None] = mapped_column(String(8), nullable=True)

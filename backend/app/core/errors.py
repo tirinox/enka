@@ -61,6 +61,11 @@ class UnsupportedMediaTypeError(EnkaError):
     code = "unsupported_media_type"
 
 
+class ServiceUnavailableError(EnkaError):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "service_unavailable"
+
+
 def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {"error": {"code": code, "message": message, "details": details or {}}}
 

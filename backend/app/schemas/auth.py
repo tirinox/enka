@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TokenRequest(BaseModel):
@@ -24,4 +24,19 @@ class TokenResponse(BaseModel):
 class MeResponse(BaseModel):
     owner_id: uuid.UUID
     name: str
+    #: ISO 639-1 code, e.g. "ru". None until set via PATCH /auth/me — the
+    #: client prompts for it the first time a translation is requested.
+    native_language: str | None = None
     token_expires_at: datetime
+
+
+class MeUpdate(BaseModel):
+    native_language: str = Field(min_length=2, max_length=8, examples=["ru"])
+
+    @field_validator("native_language")
+    @classmethod
+    def _normalize(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if not cleaned:
+            raise ValueError("native_language must not be blank")
+        return cleaned

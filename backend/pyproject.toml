@@ -15,6 +15,9 @@ dependencies = [
     "python-multipart>=0.0.20",
     "pyjwt>=2.10",
     "aiofiles>=24.1",
+    # Ollama's REST API for AI-generated definitions/translations — plain
+    # HTTP, no SDK needed. Async client keeps the call off the thread pool.
+    "httpx>=0.28",
     # Free Spaced Repetition Scheduler. Pure Python; the `optimizer` extra
     # (torch/numpy/pandas) is deliberately not installed.
     "fsrs>=6.3,<7",
@@ -32,7 +35,6 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
-    "httpx>=0.28",
     "ruff>=0.9",
 ]
 

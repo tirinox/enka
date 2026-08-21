@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import OwnerDep, SessionDep, StorageDep
+from app.api.deps import OllamaClientDep, OwnerDep, SessionDep, StorageDep
 from app.core.errors import ConflictError
 from app.core.pagination import Page
 from app.models.card import Card
@@ -21,7 +21,9 @@ from app.schemas.card import (
     SearchResponse,
 )
 from app.schemas.common import CardSort, SortOrder, TagMode
+from app.schemas.definitions import DefinitionGenerateRequest, DefinitionGenerateResponse
 from app.services import cards as card_service
+from app.services import definitions as definitions_service
 from app.services import search as search_service
 from app.services import tts as tts_service
 
@@ -232,6 +234,32 @@ async def bulk_create(
 async def get_card(card_id: uuid.UUID, owner: OwnerDep, session: SessionDep) -> CardOut:
     card = await card_service.get_card(session, owner.id, card_id)
     return card_service.card_to_out(card)
+
+
+@router.post(
+    "/{card_id}/definition/generate",
+    response_model=DefinitionGenerateResponse,
+    summary="AI-generate a definition or translation for a card's term",
+    description=(
+        "Runs the term through a local model and returns a suggestion — "
+        "either a same-language definition, or a translation into your "
+        "native language (set via `PATCH /auth/me` first). Never writes to "
+        "the card; save the result yourself via `PATCH /cards/{id}` if you "
+        "want to keep it."
+    ),
+)
+async def generate_definition(
+    card_id: uuid.UUID,
+    payload: DefinitionGenerateRequest,
+    owner: OwnerDep,
+    session: SessionDep,
+    ollama: OllamaClientDep,
+) -> DefinitionGenerateResponse:
+    card = await card_service.get_card(session, owner.id, card_id)
+    definition = await definitions_service.generate_definition(
+        ollama, card.term, payload.mode, owner.native_language
+    )
+    return DefinitionGenerateResponse(definition=definition)
 
 
 @router.patch(
