@@ -120,7 +120,7 @@ final class SearchStore: ObservableObject {
         let cardID = card.id
         Task {
             do {
-                let response = try await session.run { try await $0.generateDefinition(cardID: cardID, mode: mode) }
+                let response = try await session.run { try await $0.generateDefinition(term: card.term, mode: mode) }
                 // The row this was for may have collapsed or a different one
                 // may have opened while the request was in flight — a stale
                 // answer is dropped rather than shown under the wrong card.
