@@ -232,7 +232,18 @@ export interface TokenResponse {
 export interface MeResponse {
   owner_id: string
   name: string
+  native_language: string | null
   token_expires_at: string
+}
+
+export interface MeUpdate {
+  native_language: string
+}
+
+export type DefinitionMode = 'same_language' | 'native_language'
+
+export interface DefinitionGenerateResponse {
+  definition: string
 }
 
 export interface HealthResponse {

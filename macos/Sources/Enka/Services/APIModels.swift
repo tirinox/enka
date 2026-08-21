@@ -331,12 +331,27 @@ struct TokenResponse: Decodable {
 
 struct MeResponse: Decodable {
     let name: String
+    let nativeLanguage: String?
     let tokenExpiresAt: Date
 
     enum CodingKeys: String, CodingKey {
         case name
+        case nativeLanguage = "native_language"
         case tokenExpiresAt = "token_expires_at"
     }
+}
+
+// MARK: - AI-generated definitions
+
+/// Which kind of text to generate for a card's term — mirrors
+/// `app.schemas.definitions.DefinitionMode` on the backend.
+enum DefinitionMode: String, Encodable {
+    case sameLanguage = "same_language"
+    case nativeLanguage = "native_language"
+}
+
+struct DefinitionGenerateResponse: Decodable {
+    let definition: String
 }
 
 struct HealthResponse: Decodable {

@@ -119,6 +119,12 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** Used by the AI translation feature — prompts for this the first time
+   * a translation is requested, then never again. */
+  async function setNativeLanguage(language: string): Promise<void> {
+    owner.value = await api.auth.updateMe({ native_language: language })
+  }
+
   configureClient({
     getToken: () => token.value,
     onAuthFailure: () => {
@@ -142,5 +148,6 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     refreshOwner,
     renewIfPossible,
+    setNativeLanguage,
   }
 })
