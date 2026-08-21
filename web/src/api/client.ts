@@ -17,9 +17,12 @@ import type {
   CardCreate,
   CardFilters,
   CardUpdate,
+  DefinitionGenerateResponse,
+  DefinitionMode,
   HealthResponse,
   HeatmapResponse,
   MeResponse,
+  MeUpdate,
   Page,
   SearchResponse,
   StatsResponse,
@@ -167,6 +170,7 @@ export const api = {
     /** Short-lived and media-scoped — safe to put in an `<audio src>` URL. */
     mediaToken: () => request<TokenResponse>('/auth/media-token', { method: 'POST' }),
     me: () => request<MeResponse>('/auth/me'),
+    updateMe: (patch: MeUpdate) => request<MeResponse>('/auth/me', { method: 'PATCH', body: patch }),
   },
 
   cards: {
@@ -189,6 +193,12 @@ export const api = {
       opts: { side?: string; limit?: number; threshold?: number } = {},
       signal?: AbortSignal,
     ) => request<SearchResponse>(`/cards/search${query({ q, ...opts })}`, { signal }),
+    /** Never persisted server-side — save the result yourself via `update()`. */
+    generateDefinition: (id: string, mode: DefinitionMode) =>
+      request<DefinitionGenerateResponse>(`/cards/${id}/definition/generate`, {
+        method: 'POST',
+        body: { mode },
+      }),
   },
 
   tags: {

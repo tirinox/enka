@@ -38,6 +38,9 @@ final class Session: ObservableObject {
     /// Version string from `/health`, shown in settings — the cheapest possible
     /// proof that the thing answering is the API and not a proxy error page.
     @Published private(set) var serverVersion: String?
+    /// Nil until set via the settings tab, or prompted for the first time a
+    /// translation is requested. Used by the AI translation feature.
+    @Published private(set) var nativeLanguage: String?
 
     let client: APIClient
 
@@ -81,6 +84,7 @@ final class Session: ObservableObject {
             let me = try await client.me()
             state = .connected(name: me.name)
             tokenExpiry = me.tokenExpiresAt
+            nativeLanguage = me.nativeLanguage
         } catch let error as APIError {
             state = .failed(message: error.message)
         } catch {
@@ -115,6 +119,7 @@ final class Session: ObservableObject {
 
             let me = try await client.me()
             state = .connected(name: me.name)
+            nativeLanguage = me.nativeLanguage
         } catch let error as APIError {
             state = .failed(message: error.isOffline ? "No server at \(serverText)." : error.message)
         } catch {
@@ -129,8 +134,17 @@ final class Session: ObservableObject {
         token = nil
         tokenExpiry = nil
         serverVersion = nil
+        nativeLanguage = nil
         state = .signedOut
         Task { await client.setToken(nil) }
+    }
+
+    /// Currently the only editable field on the owner. Used by the AI
+    /// translation feature — the settings tab, and search's own translate
+    /// action when nothing is set yet, both funnel through here.
+    func setNativeLanguage(_ language: String) async throws {
+        let me = try await run { try await $0.updateMe(nativeLanguage: language) }
+        nativeLanguage = me.nativeLanguage
     }
 
     /// How long the current token has left, for the line in settings. Nil when

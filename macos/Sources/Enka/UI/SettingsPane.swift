@@ -16,9 +16,11 @@ struct SettingsPane: View {
     @State private var badge = Preferences.badgeShowsDue
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchProblem: String?
+    @State private var nativeLanguageDraft = ""
+    @State private var nativeLanguageProblem: String?
     @FocusState private var focus: Focus?
 
-    private enum Focus { case server, secret }
+    private enum Focus { case server, secret, nativeLanguage }
 
     init(vm: NotchViewModel) {
         self.vm = vm
@@ -171,6 +173,31 @@ struct SettingsPane: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Divider().overlay(Theme.hairline)
+
+            LabelledField(label: "Native language") {
+                TextField(
+                    "", text: $nativeLanguageDraft,
+                    prompt: Text("e.g. ru").foregroundColor(Theme.tertiary)
+                )
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(Theme.ink)
+                .tint(Theme.secondary)
+                .focused($focus, equals: .nativeLanguage)
+                .onSubmit { saveNativeLanguage() }
+            }
+            .help("Used by the AI translate action in Search.")
+            .onAppear { nativeLanguageDraft = session.nativeLanguage ?? "" }
+            .onChange(of: session.nativeLanguage) { _, value in nativeLanguageDraft = value ?? "" }
+
+            if let nativeLanguageProblem {
+                Text(nativeLanguageProblem)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.hard)
+                    .lineLimit(2)
+            }
+
             Spacer(minLength: 0)
 
             HStack(spacing: 6) {
@@ -225,9 +252,26 @@ struct SettingsPane: View {
             launchProblem = "macOS would not set that: \(error.localizedDescription)"
         }
     }
+
+    /// Saved on submit, not on every keystroke — a language code is typed
+    /// once and left alone, unlike the toggles above it.
+    private func saveNativeLanguage() {
+        let trimmed = nativeLanguageDraft.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != (session.nativeLanguage ?? "") else { return }
+        nativeLanguageProblem = nil
+        Task {
+            do {
+                try await session.setNativeLanguage(trimmed)
+            } catch let error as APIError {
+                nativeLanguageProblem = error.message
+            } catch {
+                nativeLanguageProblem = error.localizedDescription
+            }
+        }
+    }
 }
 
-/// A labelled box. Three of these on the tab, and each is a label, a rule, and
+/// A labelled box. Four of these on the tab, and each is a label, a rule, and
 /// a field — spelled once.
 private struct LabelledField<Content: View>: View {
     let label: String

@@ -79,7 +79,16 @@ struct SearchPane: View {
                             toggleExpanded: {
                                 search.expanded = search.expanded == hit.card.id ? nil : hit.card.id
                             },
-                            toggleSuspended: { search.toggleSuspended(hit.card) }
+                            toggleSuspended: { search.toggleSuspended(hit.card) },
+                            isGenerating: search.isGenerating,
+                            suggestion: search.suggestion,
+                            askingNativeLanguage: search.askingNativeLanguage,
+                            nativeLanguageDraft: $search.nativeLanguageDraft,
+                            define: { search.generateDefinition(for: hit.card, mode: .sameLanguage) },
+                            translate: { search.translateTapped(for: hit.card) },
+                            confirmNativeLanguage: { search.confirmNativeLanguage(for: hit.card) },
+                            acceptSuggestion: { search.acceptSuggestion(for: hit.card) },
+                            discardSuggestion: { search.discardSuggestion() }
                         )
                     }
                 }
@@ -111,6 +120,15 @@ private struct ResultRow: View {
     let playingClipID: String?
     let toggleExpanded: () -> Void
     let toggleSuspended: () -> Void
+    let isGenerating: Bool
+    let suggestion: String?
+    let askingNativeLanguage: Bool
+    let nativeLanguageDraft: Binding<String>
+    let define: () -> Void
+    let translate: () -> Void
+    let confirmNativeLanguage: () -> Void
+    let acceptSuggestion: () -> Void
+    let discardSuggestion: () -> Void
 
     @State private var hovering = false
 
@@ -189,6 +207,7 @@ private struct ResultRow: View {
 
     private var detail: some View {
         VStack(alignment: .leading, spacing: 5) {
+            aiSection
             if let notes = card.notes, !notes.isEmpty {
                 Text(notes)
                     .font(.system(size: 11))
@@ -211,6 +230,78 @@ private struct ResultRow: View {
             }
         }
         .padding(.bottom, 2)
+    }
+
+    /// One of four states: idle (two small actions), thinking, a suggestion
+    /// waiting on accept/discard, or — the one time this row asks for text —
+    /// a native-language prompt. Accept/discard only: free-text editing of
+    /// the suggestion is the web client's job, not this panel's.
+    @ViewBuilder
+    private var aiSection: some View {
+        if isGenerating {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Thinking…")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.tertiary)
+            }
+        } else if let suggestion {
+            HStack(spacing: 6) {
+                Text(suggestion)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(2)
+                Spacer(minLength: 4)
+                Button(action: acceptSuggestion) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.good)
+                }
+                .buttonStyle(.plain)
+                .help("Save this definition")
+                Button(action: discardSuggestion) {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Discard")
+            }
+        } else if askingNativeLanguage {
+            HStack(spacing: 6) {
+                TextField(
+                    "", text: nativeLanguageDraft,
+                    prompt: Text("e.g. ru").foregroundColor(Theme.tertiary)
+                )
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Theme.ink)
+                .padding(.horizontal, 6)
+                .frame(height: 20)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Theme.surface))
+                .onSubmit(confirmNativeLanguage)
+                Button("Save", action: confirmNativeLanguage)
+                    .buttonStyle(PanelButtonStyle())
+            }
+        } else {
+            HStack(spacing: 12) {
+                Button(action: define) {
+                    Label("Define", systemImage: "character.book.closed")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.secondary)
+                .help("AI-generate a definition")
+
+                Button(action: translate) {
+                    Label("Translate", systemImage: "globe")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.secondary)
+                .help("AI-translate into your native language")
+            }
+        }
     }
 }
 

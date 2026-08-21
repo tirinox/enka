@@ -220,6 +220,16 @@ actor APIClient {
         try await send("auth/me")
     }
 
+    func updateMe(nativeLanguage: String) async throws -> MeResponse {
+        struct Body: Encodable {
+            let nativeLanguage: String
+            enum CodingKeys: String, CodingKey { case nativeLanguage = "native_language" }
+        }
+        return try await send(
+            "auth/me", method: "PATCH", body: try encode(Body(nativeLanguage: nativeLanguage))
+        )
+    }
+
     // Study
 
     func nextCard(mode: StudyMode, direction: StudyDirection, tags: [String]) async throws -> StudyCard {
@@ -257,6 +267,20 @@ actor APIClient {
     func update(cardID: String, suspended: Bool) async throws -> Card {
         struct Patch: Encodable { let suspended: Bool }
         return try await send("cards/\(cardID)", method: "PATCH", body: try encode(Patch(suspended: suspended)))
+    }
+
+    func update(cardID: String, definition: String) async throws -> Card {
+        struct Patch: Encodable { let definition: String }
+        return try await send("cards/\(cardID)", method: "PATCH", body: try encode(Patch(definition: definition)))
+    }
+
+    /// Never persisted server-side — the caller saves the result itself via
+    /// `update(cardID:definition:)` if it wants to keep it.
+    func generateDefinition(cardID: String, mode: DefinitionMode) async throws -> DefinitionGenerateResponse {
+        struct Body: Encodable { let mode: DefinitionMode }
+        return try await send(
+            "cards/\(cardID)/definition/generate", method: "POST", body: try encode(Body(mode: mode))
+        )
     }
 
     func tags() async throws -> [Tag] {
