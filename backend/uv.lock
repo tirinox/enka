@@ -127,6 +127,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "fsrs" },
+    { name = "httpx" },
     { name = "piper-tts" },
     { name = "py3langid" },
     { name = "pydantic" },
@@ -140,7 +141,6 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -153,7 +153,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fsrs", specifier = ">=6.3,<7" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "piper-tts", specifier = ">=1.7,<2" },
     { name = "py3langid", specifier = ">=0.3,<1" },
     { name = "pydantic", specifier = ">=2.10" },

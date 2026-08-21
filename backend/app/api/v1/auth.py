@@ -10,7 +10,7 @@ from app.api.deps import OwnerDep, SessionDep, get_token_payload
 from app.core.errors import UnauthorizedError
 from app.core.security import create_token, login_throttle, verify_access_secret
 from app.models.owner import Owner
-from app.schemas.auth import MeResponse, TokenRequest, TokenResponse
+from app.schemas.auth import MeResponse, MeUpdate, TokenRequest, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -72,5 +72,34 @@ async def me(
     return MeResponse(
         owner_id=owner.id,
         name=owner.name,
+        native_language=owner.native_language,
         token_expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+    )
+
+
+@router.patch(
+    "/me",
+    response_model=MeResponse,
+    summary="Set your native language",
+    description=(
+        "Currently the only editable field. Used by the AI translation "
+        "feature (POST /cards/{id}/definition/generate) to pick a target "
+        "language — the client prompts for this the first time a "
+        "translation is requested."
+    ),
+)
+async def update_me(
+    payload: MeUpdate,
+    owner: OwnerDep,
+    session: SessionDep,
+    token_payload: Annotated[dict, Depends(get_token_payload)],
+) -> MeResponse:
+    owner.native_language = payload.native_language
+    await session.commit()
+    await session.refresh(owner)
+    return MeResponse(
+        owner_id=owner.id,
+        name=owner.name,
+        native_language=owner.native_language,
+        token_expires_at=datetime.fromtimestamp(token_payload["exp"], tz=UTC),
     )

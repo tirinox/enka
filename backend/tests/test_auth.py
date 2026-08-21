@@ -133,3 +133,34 @@ def test_media_token_expires_much_sooner_than_api_token(owner):
     _, media_expiry = create_token(owner.id, scope="media")
     assert media_expiry < api_expiry
     assert media_expiry - datetime.now(UTC) < timedelta(hours=1)
+
+
+# ------------------------------------------------------------ native language
+async def test_native_language_is_null_until_set(client):
+    response = await client.get("/api/v1/auth/me")
+    assert response.json()["native_language"] is None
+
+
+async def test_patch_me_sets_native_language(client):
+    response = await client.patch("/api/v1/auth/me", json={"native_language": "ru"})
+    assert response.status_code == 200
+    assert response.json()["native_language"] == "ru"
+
+    fetched = await client.get("/api/v1/auth/me")
+    assert fetched.json()["native_language"] == "ru"
+
+
+async def test_patch_me_normalizes_case_and_whitespace(client):
+    response = await client.patch("/api/v1/auth/me", json={"native_language": " RU "})
+    assert response.status_code == 200
+    assert response.json()["native_language"] == "ru"
+
+
+async def test_patch_me_rejects_blank_native_language(client):
+    response = await client.patch("/api/v1/auth/me", json={"native_language": "  "})
+    assert response.status_code == 422
+
+
+async def test_patch_me_requires_authentication(anon_client):
+    response = await anon_client.patch("/api/v1/auth/me", json={"native_language": "ru"})
+    assert response.status_code == 401

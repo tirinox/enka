@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     #: tts_voice_map's languages — see app/services/tts.py.
     tts_min_confidence: float = Field(default=0.75, ge=0.0, le=1.0)
 
+    # --- definitions (AI-generated card definitions/translations) ----------
+    ollama_base_url: str = "http://ollama:11434"
+    ollama_model: str = "qwen2.5:3b"
+    #: Generous on purpose: a cold local model can take a while to answer its
+    #: first request after the container starts.
+    ollama_timeout_seconds: float = 60.0
+
     @field_validator("tts_voice_map", mode="before")
     @classmethod
     def _parse_voice_map(cls, value: object) -> object:
