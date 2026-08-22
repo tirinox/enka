@@ -14,6 +14,7 @@ from app.core.errors import UnauthorizedError
 from app.core.security import TokenScope, decode_token
 from app.db.session import get_session
 from app.models.owner import Owner
+from app.services.ai_cloud import AICloudClient
 from app.services.ollama import OllamaClient
 from app.storage.local import LocalStorage
 
@@ -31,7 +32,18 @@ StorageDep = Annotated[LocalStorage, Depends(get_storage)]
 
 
 @functools.lru_cache
+def get_ai_client() -> AICloudClient:
+    return AICloudClient(
+        settings.ai_url, settings.ai_model, settings.ai_api_key, settings.ai_timeout_seconds
+    )
+
+
+AIClientDep = Annotated[AICloudClient, Depends(get_ai_client)]
+
+
+@functools.lru_cache
 def get_ollama_client() -> OllamaClient:
+    """Unused by any route — kept as a fallback option, see app/core/config.py."""
     return OllamaClient(
         settings.ollama_base_url, settings.ollama_model, settings.ollama_timeout_seconds
     )

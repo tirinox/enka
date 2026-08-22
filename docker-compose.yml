@@ -22,22 +22,6 @@ services:
       retries: 20
       start_period: 10s
 
-  ollama:
-    # Local LLM for AI-generated definitions/translations (app/services/
-    # definitions.py) — free, no API key, but it's a real ~2-4GB resident
-    # once a model is pulled. `make ollama-pull` fetches the default model;
-    # nothing is bundled into the image itself.
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    volumes:
-      - ollama:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-
   api:
     build:
       context: ./backend
@@ -45,8 +29,6 @@ services:
     restart: unless-stopped
     depends_on:
       db:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
     environment:
       ENKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-enka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-enka}
@@ -59,9 +41,9 @@ services:
       ENKA_TTS_ENABLED: ${ENKA_TTS_ENABLED:-true}
       ENKA_TTS_VOICE_MAP: ${ENKA_TTS_VOICE_MAP:-en:en_US-lessac-medium,ru:ru_RU-irina-medium}
       ENKA_TTS_MIN_CONFIDENCE: ${ENKA_TTS_MIN_CONFIDENCE:-0.75}
-      ENKA_OLLAMA_BASE_URL: ${ENKA_OLLAMA_BASE_URL:-http://ollama:11434}
-      ENKA_OLLAMA_MODEL: ${ENKA_OLLAMA_MODEL:-qwen2.5:3b}
-      ENKA_OLLAMA_TIMEOUT_SECONDS: ${ENKA_OLLAMA_TIMEOUT_SECONDS:-60}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-deepseek-v4-flash}
+      AI_URL: ${AI_URL:-https://api.deepseek.com}
       ENKA_FSRS_DESIRED_RETENTION: ${ENKA_FSRS_DESIRED_RETENTION:-0.9}
       ENKA_FSRS_MAXIMUM_INTERVAL: ${ENKA_FSRS_MAXIMUM_INTERVAL:-36500}
       ENKA_FSRS_ENABLE_FUZZING: ${ENKA_FSRS_ENABLE_FUZZING:-true}
@@ -82,4 +64,3 @@ services:
 volumes:
   pgdata:
   audio:
-  ollama:

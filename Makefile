@@ -115,10 +115,6 @@ history: ## Show migration history
 backfill-tts: ## Generate term audio for cards that predate auto-gen. args="--dry-run" or args="--limit 20"
 	$(DC) exec api python -m app.scripts.backfill_term_audio $(args)
 
-.PHONY: ollama-pull
-ollama-pull: ## Pull the local model AI-generated definitions use. model=name to override the default.
-	$(DC) exec ollama ollama pull $(or $(model),qwen2.5:3b)
-
 # ------------------------------------------------------------- quality ----
 .PHONY: test
 test: ## Run the test suite
