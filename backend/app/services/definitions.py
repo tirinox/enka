@@ -29,9 +29,13 @@ def _build_prompt(term: str, mode: DefinitionMode, native_language: str | None) 
             f"Term: {term}"
         )
     return (
-        f"Translate the term below into {native_language}. If it's a word or "
-        "short phrase, give the single best equivalent, not an explanation. "
-        "Output only the translation — no preamble, no quotes, no markdown.\n\n"
+        f"Translate the term below into {native_language}. Give the 2-3 most "
+        "common equivalents, separated by commas, ordered from most to least "
+        "common — covering the term's distinct meanings if it has several "
+        "(e.g. \"lock\" -> \"замок, запирать\"). Give a single equivalent only "
+        "if the term really has just one common translation. Equivalents "
+        "only, not explanations. Output only the translation — no preamble, "
+        "no quotes, no markdown.\n\n"
         f"Term: {term}"
     )
 

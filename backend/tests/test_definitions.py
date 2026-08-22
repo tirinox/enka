@@ -56,6 +56,11 @@ def test_native_language_prompt_names_the_target():
     assert "ru" in prompt
 
 
+def test_native_language_prompt_asks_for_several_equivalents():
+    prompt = definitions_service._build_prompt("lock", DefinitionMode.NATIVE_LANGUAGE, "ru")
+    assert "2-3" in prompt
+
+
 # ------------------------------------------------------------- sanitizing --
 @pytest.mark.parametrize(
     ("raw", "expected"),
