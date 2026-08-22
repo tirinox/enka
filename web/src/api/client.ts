@@ -17,9 +17,12 @@ import type {
   CardCreate,
   CardFilters,
   CardUpdate,
+  DefinitionGenerateResponse,
+  DefinitionMode,
   HealthResponse,
   HeatmapResponse,
   MeResponse,
+  MeUpdate,
   Page,
   SearchResponse,
   StatsResponse,
@@ -167,6 +170,7 @@ export const api = {
     /** Short-lived and media-scoped — safe to put in an `<audio src>` URL. */
     mediaToken: () => request<TokenResponse>('/auth/media-token', { method: 'POST' }),
     me: () => request<MeResponse>('/auth/me'),
+    updateMe: (patch: MeUpdate) => request<MeResponse>('/auth/me', { method: 'PATCH', body: patch }),
   },
 
   cards: {
@@ -189,6 +193,18 @@ export const api = {
       opts: { side?: string; limit?: number; threshold?: number } = {},
       signal?: AbortSignal,
     ) => request<SearchResponse>(`/cards/search${query({ q, ...opts })}`, { signal }),
+  },
+
+  definitions: {
+    /** Not card-scoped — works on a term that hasn't been saved yet, which
+     * is what the Add flow needs. Never persisted server-side; save the
+     * result yourself via `cards.create()`/`cards.update()` if you want to
+     * keep it. */
+    generate: (term: string, mode: DefinitionMode) =>
+      request<DefinitionGenerateResponse>('/definitions/generate', {
+        method: 'POST',
+        body: { term, mode },
+      }),
   },
 
   tags: {

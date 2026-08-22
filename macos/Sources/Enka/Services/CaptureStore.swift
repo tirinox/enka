@@ -24,6 +24,16 @@ final class CaptureStore: ObservableObject {
     /// The card just saved, held only long enough to show a line confirming it.
     @Published private(set) var justSaved: String?
 
+    // MARK: - AI definition
+    //
+    // Unlike Search's read-mostly rows, this tab's definition field is
+    // already freely editable — so a generated suggestion just fills it
+    // directly, the same as typing would, rather than needing its own
+    // accept/discard step.
+    @Published private(set) var isGenerating = false
+    @Published var askingNativeLanguage = false
+    @Published var nativeLanguageDraft = ""
+
     private let session: Session
     private var lookup: Task<Void, Never>?
     private var noticeClear: Task<Void, Never>?
@@ -84,6 +94,8 @@ final class CaptureStore: ObservableObject {
                 definition = ""
                 duplicate = nil
                 nearby = []
+                askingNativeLanguage = false
+                nativeLanguageDraft = ""
                 justSaved = created.term
                 announce(nil)
                 Task {
@@ -96,6 +108,55 @@ final class CaptureStore: ObservableObject {
                 announce(error.localizedDescription)
             }
             isSaving = false
+        }
+    }
+
+    func generateDefinition(mode: DefinitionMode) {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        isGenerating = true
+        Task {
+            do {
+                let response = try await session.run { try await $0.generateDefinition(term: trimmed, mode: mode) }
+                // A fast typist can move on to a different word while a local
+                // model is still thinking about the last one — an answer for
+                // a term that is no longer on screen is dropped, not applied.
+                if term.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed {
+                    definition = response.definition
+                }
+            } catch let error as APIError {
+                announce(error.message)
+            } catch {
+                announce(error.localizedDescription)
+            }
+            isGenerating = false
+        }
+    }
+
+    /// Asks first if nothing is set yet, rather than sending the server a
+    /// translation request it would just reject.
+    func translateTapped() {
+        if let language = session.nativeLanguage, !language.isEmpty {
+            generateDefinition(mode: .nativeLanguage)
+        } else {
+            askingNativeLanguage = true
+        }
+    }
+
+    func confirmNativeLanguage() {
+        let language = nativeLanguageDraft.trimmingCharacters(in: .whitespaces)
+        guard !language.isEmpty else { return }
+        Task {
+            do {
+                try await session.setNativeLanguage(language)
+                askingNativeLanguage = false
+                nativeLanguageDraft = ""
+                generateDefinition(mode: .nativeLanguage)
+            } catch let error as APIError {
+                announce(error.message)
+            } catch {
+                announce(error.localizedDescription)
+            }
         }
     }
 
@@ -117,6 +178,8 @@ final class CaptureStore: ObservableObject {
         duplicate = nil
         nearby = []
         notice = nil
+        askingNativeLanguage = false
+        nativeLanguageDraft = ""
     }
 
     private func announce(_ message: String?) {

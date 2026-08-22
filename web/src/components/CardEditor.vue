@@ -9,18 +9,20 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { ApiError, api } from '@/api/client'
 import { bytes, fullDate, percent, relativeTime } from '@/composables/format'
+import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import AudioPlayer from '@/components/AudioPlayer.vue'
 import StarRating from '@/components/StarRating.vue'
 import TagChip from '@/components/TagChip.vue'
-import type { AudioSide, Card, TagWithCount } from '@/api/types'
+import type { AudioSide, Card, DefinitionMode, TagWithCount } from '@/api/types'
 
 const props = defineProps<{ card: Card | null; open: boolean; knownTags: TagWithCount[] }>()
 const emit = defineEmits<{ close: []; saved: [Card]; deleted: [string] }>()
 
 const toasts = useToastStore()
 const confirm = useConfirmStore()
+const authStore = useAuthStore()
 
 const term = ref('')
 const definition = ref('')
@@ -78,6 +80,9 @@ function reset() {
   tags.value = [...(c?.tags ?? [])]
   tagDraft.value = ''
   baseline.value = snapshot()
+  defining.value = null
+  askingNativeLanguage.value = false
+  nativeLanguageDraft.value = ''
 }
 
 watch(
@@ -100,6 +105,59 @@ function addTag(name?: string) {
 
 function removeTag(name: string) {
   tags.value = tags.value.filter((t) => t !== name)
+}
+
+// --------------------------------------------------------- AI definition ---
+// Works on the typed term directly — not card-scoped — so it's available
+// on a brand-new, unsaved card exactly the same as an existing one. Never
+// writes to the card itself; the result just fills the field, same as
+// typing it would, and the normal Save button persists it.
+const defining = ref<DefinitionMode | null>(null)
+const askingNativeLanguage = ref(false)
+const nativeLanguageDraft = ref('')
+
+const canGenerate = computed(() => term.value.trim().length > 0 && defining.value === null)
+
+const translateLabel = computed(() => {
+  const lang = authStore.owner?.native_language
+  return lang ? `Translate to ${lang.toUpperCase()}` : 'Translate…'
+})
+
+async function generate(mode: DefinitionMode) {
+  const typed = term.value.trim()
+  if (!typed) return
+  defining.value = mode
+  try {
+    const result = await api.definitions.generate(typed, mode)
+    // The term may have changed while a slow local model was still
+    // thinking — an answer for a word no longer on screen is dropped.
+    if (term.value.trim() === typed) definition.value = result.definition
+  } catch (e) {
+    if (e instanceof ApiError) toasts.error(e.message)
+  } finally {
+    defining.value = null
+  }
+}
+
+function onTranslateClick() {
+  if (authStore.owner?.native_language) {
+    generate('native_language')
+  } else {
+    askingNativeLanguage.value = true
+  }
+}
+
+async function confirmNativeLanguage() {
+  const language = nativeLanguageDraft.value.trim()
+  if (!language) return
+  try {
+    await authStore.setNativeLanguage(language)
+    askingNativeLanguage.value = false
+    nativeLanguageDraft.value = ''
+    await generate('native_language')
+  } catch (e) {
+    if (e instanceof ApiError) toasts.error(e.message)
+  }
 }
 
 async function save() {
@@ -237,9 +295,40 @@ const srsLabel = computed(() => {
           </div>
 
           <div class="field">
-            <label class="label" for="def">
-              Definition <span class="faint">— optional, fill it in later</span>
-            </label>
+            <div class="label-row">
+              <label class="label" for="def">
+                Definition <span class="faint">— optional, fill it in later</span>
+              </label>
+              <div class="ai-actions">
+                <button
+                  class="btn btn-ghost btn-sm"
+                  :disabled="!canGenerate"
+                  @click="generate('same_language')"
+                >
+                  {{ defining === 'same_language' ? 'Thinking…' : 'AI define' }}
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  :disabled="!canGenerate"
+                  @click="onTranslateClick"
+                >
+                  {{ defining === 'native_language' ? 'Thinking…' : translateLabel }}
+                </button>
+              </div>
+            </div>
+            <div v-if="askingNativeLanguage" class="native-language-prompt">
+              <input
+                v-model="nativeLanguageDraft"
+                class="input"
+                placeholder="e.g. ru, de, fr"
+                autofocus
+                @keydown.enter.prevent="confirmNativeLanguage"
+              />
+              <button class="btn btn-primary btn-sm" @click="confirmNativeLanguage">
+                Save &amp; translate
+              </button>
+              <button class="btn btn-sm" @click="askingNativeLanguage = false">Cancel</button>
+            </div>
             <textarea
               id="def"
               v-model="definition"
@@ -465,6 +554,28 @@ h2 {
 
 .tombstone .btn {
   margin-left: auto;
+}
+
+.label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.ai-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.native-language-prompt {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.native-language-prompt .input {
+  flex: 1;
 }
 
 .tag-row {

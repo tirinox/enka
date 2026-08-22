@@ -127,70 +127,68 @@ async def test_generate_definition_empty_response_is_service_unavailable():
 
 
 # --------------------------------------------------------- endpoint (e2e) --
-async def test_generate_endpoint_same_language(client, card_factory, stub_ollama):
+# /api/v1/definitions/generate is deliberately not card-scoped: the Add flow
+# in both clients calls it on a term that hasn't been saved as a card yet,
+# same endpoint the edit flow uses on an existing one's term.
+async def test_generate_endpoint_same_language(client, stub_ollama):
     stub_ollama("a window, especially in a house")
-    card = await card_factory("das Fenster")
 
     response = await client.post(
-        f"/api/v1/cards/{card['id']}/definition/generate", json={"mode": "same_language"}
+        "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
     )
     assert response.status_code == 200
     assert response.json()["definition"] == "a window, especially in a house"
 
 
-async def test_generate_endpoint_never_writes_to_the_card(client, card_factory, stub_ollama):
+async def test_generate_endpoint_never_writes_anything(client, stub_ollama):
+    """No card, no owner state — the response is the only effect."""
     stub_ollama("a window")
-    card = await card_factory("das Fenster")
 
-    await client.post(
-        f"/api/v1/cards/{card['id']}/definition/generate", json={"mode": "same_language"}
+    response = await client.post(
+        "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
     )
+    assert response.status_code == 200
 
-    fetched = (await client.get(f"/api/v1/cards/{card['id']}")).json()
-    assert fetched["definition"] is None
+    cards = (await client.get("/api/v1/cards?q=das Fenster")).json()
+    assert cards["total"] == 0
+
+
+async def test_generate_endpoint_blank_term_is_422(client, stub_ollama):
+    stub_ollama("unused")
+    response = await client.post(
+        "/api/v1/definitions/generate", json={"term": "   ", "mode": "same_language"}
+    )
+    assert response.status_code == 422
 
 
 async def test_generate_endpoint_translation_without_native_language_is_a_clear_error(
-    client, card_factory, stub_ollama
+    client, stub_ollama
 ):
     stub_ollama("unused")
-    card = await card_factory("das Fenster")
 
     response = await client.post(
-        f"/api/v1/cards/{card['id']}/definition/generate", json={"mode": "native_language"}
+        "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "native_language"}
     )
     assert response.status_code == 422
     assert "native language" in response.json()["error"]["message"].lower()
 
 
-async def test_generate_endpoint_translation_with_native_language_set(
-    client, card_factory, stub_ollama
-):
+async def test_generate_endpoint_translation_with_native_language_set(client, stub_ollama):
     await client.patch("/api/v1/auth/me", json={"native_language": "ru"})
     stub_ollama("окно")
-    card = await card_factory("das Fenster")
 
     response = await client.post(
-        f"/api/v1/cards/{card['id']}/definition/generate", json={"mode": "native_language"}
+        "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "native_language"}
     )
     assert response.status_code == 200
     assert response.json()["definition"] == "окно"
 
 
-async def test_generate_endpoint_unknown_card_is_404(client, stub_ollama, new_uuid):
-    stub_ollama("unused")
-    response = await client.post(
-        f"/api/v1/cards/{new_uuid()}/definition/generate", json={"mode": "same_language"}
-    )
-    assert response.status_code == 404
-
-
-async def test_generate_endpoint_ollama_unreachable_is_503(client, card_factory, stub_ollama):
+async def test_generate_endpoint_ollama_unreachable_is_503(client, stub_ollama):
     stub_ollama(OllamaError("connection refused"))
-    card = await card_factory("das Fenster")
 
     response = await client.post(
-        f"/api/v1/cards/{card['id']}/definition/generate", json={"mode": "same_language"}
+        "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
     )
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "service_unavailable"
@@ -198,13 +196,12 @@ async def test_generate_endpoint_ollama_unreachable_is_503(client, card_factory,
 
 async def test_generate_endpoint_requires_authentication(anon_client, force_owner, stub_ollama):
     stub_ollama("unused")
-    card = (await anon_client.post("/api/v1/cards", json={"term": "word"})).json()
 
     from app.api.deps import get_current_owner
     from app.main import app
 
     app.dependency_overrides.pop(get_current_owner, None)
     response = await anon_client.post(
-        f"/api/v1/cards/{card['id']}/definition/generate", json={"mode": "same_language"}
+        "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
     )
     assert response.status_code == 401

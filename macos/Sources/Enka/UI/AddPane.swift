@@ -5,7 +5,8 @@ import SwiftUI
 /// One field that matters and one that can wait. The API allows a card with no
 /// definition, and that is the intended shape of this tab: you met a word, you
 /// have three seconds, type it and move on. The meaning gets filled in later,
-/// at a desk, in the web client.
+/// at a desk, in the web client — or, now, with one AI-generated suggestion
+/// before you move on, for when three seconds is also enough to check it.
 ///
 /// Return saves. Not ⌘Return — this is the tab you are in for four seconds, and
 /// a modifier on the one action it has is a modifier you press four hundred
@@ -19,7 +20,7 @@ struct AddPane: View {
     @ObservedObject private var tagStore: TagStore
 
     @FocusState private var focus: Field?
-    private enum Field { case term, definition }
+    private enum Field { case term, definition, nativeLanguage }
 
     init(vm: NotchViewModel) {
         self.vm = vm
@@ -31,6 +32,7 @@ struct AddPane: View {
         VStack(alignment: .leading, spacing: 8) {
             termField
             status
+            aiRow
             definitionField
             footer
         }
@@ -40,6 +42,9 @@ struct AddPane: View {
             if !wants { focus = nil }
         }
         .onChange(of: capture.term) { _, _ in capture.lookupChanged() }
+        .onChange(of: capture.askingNativeLanguage) { _, asking in
+            if asking { focus = .nativeLanguage }
+        }
         .animation(Theme.contentAnimation, value: capture.duplicate?.id)
         .animation(Theme.contentAnimation, value: capture.justSaved)
     }
@@ -157,6 +162,64 @@ struct AddPane: View {
             }
         }
         .frame(height: 18, alignment: .leading)
+    }
+
+    // MARK: - AI definition
+    //
+    // Directly fills `definition` rather than staging a suggestion for
+    // accept/discard — unlike Search's read-mostly rows, this field is
+    // already freely editable, so a generated answer is just one more way
+    // to arrive at the same text typing would.
+
+    @ViewBuilder
+    private var aiRow: some View {
+        if capture.isGenerating {
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.small)
+                Text("Thinking…")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.tertiary)
+            }
+            .frame(height: 16, alignment: .leading)
+        } else if capture.askingNativeLanguage {
+            HStack(spacing: 6) {
+                TextField(
+                    "", text: $capture.nativeLanguageDraft,
+                    prompt: Text("e.g. ru").foregroundColor(Theme.tertiary)
+                )
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Theme.ink)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Theme.surface))
+                .focused($focus, equals: .nativeLanguage)
+                .onSubmit { capture.confirmNativeLanguage() }
+                Button("Save") { capture.confirmNativeLanguage() }
+                    .buttonStyle(PanelButtonStyle())
+            }
+        } else if !capture.term.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            HStack(spacing: 12) {
+                Button { capture.generateDefinition(mode: .sameLanguage) } label: {
+                    Label("Define", systemImage: "character.book.closed")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.secondary)
+                .help("AI-generate a definition")
+
+                Button { capture.translateTapped() } label: {
+                    Label("Translate", systemImage: "globe")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.secondary)
+                .help("AI-translate into your native language")
+
+                Spacer(minLength: 0)
+            }
+            .frame(height: 16, alignment: .leading)
+        }
     }
 
     // MARK: - Footer
