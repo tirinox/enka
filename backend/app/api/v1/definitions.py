@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.deps import OllamaClientDep, OwnerDep
+from app.api.deps import AIClientDep, OwnerDep
 from app.schemas.definitions import DefinitionGenerateRequest, DefinitionGenerateResponse
 from app.services import definitions as definitions_service
 
@@ -23,9 +23,9 @@ router = APIRouter(prefix="/definitions", tags=["definitions"])
 async def generate(
     payload: DefinitionGenerateRequest,
     owner: OwnerDep,
-    ollama: OllamaClientDep,
+    ai_client: AIClientDep,
 ) -> DefinitionGenerateResponse:
     definition = await definitions_service.generate_definition(
-        ollama, payload.term, payload.mode, owner.native_language
+        ai_client, payload.term, payload.mode, owner.native_language
     )
     return DefinitionGenerateResponse(definition=definition)

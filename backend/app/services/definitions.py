@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from app.core.errors import ServiceUnavailableError, ValidationError
 from app.schemas.definitions import DefinitionMode
-from app.services.ollama import OllamaClient, OllamaError
+from app.services.ai_cloud import AICloudClient, AICloudError
 
 #: Generous for "short but precise" — well under Card.definition's 10,000
 #: char limit, but enough to cap a model that ignores the prompt's ask for
@@ -50,7 +50,7 @@ def _sanitize(text: str) -> str:
 
 
 async def generate_definition(
-    client: OllamaClient,
+    client: AICloudClient,
     term: str,
     mode: DefinitionMode,
     native_language: str | None,
@@ -58,7 +58,7 @@ async def generate_definition(
     """Returns a suggested definition/translation for `term`. Never writes to the DB.
 
     Raises `ValidationError` if translation was requested with no native
-    language configured, or `ServiceUnavailableError` if Ollama is
+    language configured, or `ServiceUnavailableError` if the AI provider is
     unreachable or returns something unusable.
     """
     if mode is DefinitionMode.NATIVE_LANGUAGE and not native_language:
@@ -70,7 +70,7 @@ async def generate_definition(
     prompt = _build_prompt(term, mode, native_language)
     try:
         raw = await client.generate(prompt)
-    except OllamaError as exc:
+    except AICloudError as exc:
         raise ServiceUnavailableError(
             "The definition service is unavailable right now. Try again shortly.",
             {"reason": str(exc)},

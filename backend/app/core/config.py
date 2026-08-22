@@ -68,6 +68,19 @@ class Settings(BaseSettings):
     tts_min_confidence: float = Field(default=0.75, ge=0.0, le=1.0)
 
     # --- definitions (AI-generated card definitions/translations) ----------
+    # Cloud provider (default) — any OpenAI-compatible /chat/completions API,
+    # e.g. DeepSeek. Deliberately not ENKA_-prefixed: these three come
+    # straight from the provider's own dashboard, so the env var names match
+    # what you'd paste from there rather than this app's usual convention.
+    ai_api_key: str = Field(default="", validation_alias="AI_API_KEY")
+    ai_model: str = Field(default="deepseek-v4-flash", validation_alias="AI_MODEL")
+    ai_url: str = Field(default="https://api.deepseek.com", validation_alias="AI_URL")
+    ai_timeout_seconds: float = Field(default=60.0, validation_alias="AI_TIMEOUT_SECONDS")
+
+    # Local Ollama server — unused by default (see app/api/deps.py), kept as
+    # a fallback option for anyone who'd rather run a model locally than pay
+    # a cloud provider. Not wired into docker-compose.yml; bring your own
+    # Ollama host and point ollama_base_url at it to use this.
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "qwen2.5:3b"
     #: Generous on purpose: a cold local model can take a while to answer its

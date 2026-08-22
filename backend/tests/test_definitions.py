@@ -1,22 +1,22 @@
 """AI-generated definitions/translations.
 
-A real Ollama server isn't available in CI, so every test replaces
-`get_ollama_client` with `_FakeOllamaClient` via `app.dependency_overrides` —
-the same seam `get_storage` uses for `LocalStorage` in `app_client`.
+A real cloud AI provider isn't available in CI, so every test replaces
+`get_ai_client` with `_FakeAIClient` via `app.dependency_overrides` — the
+same seam `get_storage` uses for `LocalStorage` in `app_client`.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from app.api.deps import get_ollama_client
+from app.api.deps import get_ai_client
 from app.core.errors import ServiceUnavailableError, ValidationError
 from app.schemas.definitions import DefinitionMode
 from app.services import definitions as definitions_service
-from app.services.ollama import OllamaError
+from app.services.ai_cloud import AICloudError
 
 
-class _FakeOllamaClient:
+class _FakeAIClient:
     def __init__(self, response: str | Exception):
         self._response = response
 
@@ -28,19 +28,19 @@ class _FakeOllamaClient:
 
 
 @pytest.fixture
-def stub_ollama():
-    """Returns a setter: `stub_ollama("some text")` or `stub_ollama(OllamaError(...))`."""
+def stub_ai():
+    """Returns a setter: `stub_ai("some text")` or `stub_ai(AICloudError(...))`."""
     from app.main import app
 
-    fake = _FakeOllamaClient("")
+    fake = _FakeAIClient("")
 
-    def _set(response: str | Exception) -> _FakeOllamaClient:
+    def _set(response: str | Exception) -> _FakeAIClient:
         fake._response = response
         return fake
 
-    app.dependency_overrides[get_ollama_client] = lambda: fake
+    app.dependency_overrides[get_ai_client] = lambda: fake
     yield _set
-    app.dependency_overrides.pop(get_ollama_client, None)
+    app.dependency_overrides.pop(get_ai_client, None)
 
 
 # ---------------------------------------------------------------- prompts --
@@ -109,10 +109,10 @@ async def test_generate_definition_translation_with_native_language():
     assert result == "окно"
 
 
-async def test_generate_definition_wraps_ollama_errors():
+async def test_generate_definition_wraps_ai_cloud_errors():
     with pytest.raises(ServiceUnavailableError):
         await definitions_service.generate_definition(
-            _StubClient(OllamaError("connection refused")),
+            _StubClient(AICloudError("connection refused")),
             "hello",
             DefinitionMode.SAME_LANGUAGE,
             None,
@@ -130,8 +130,8 @@ async def test_generate_definition_empty_response_is_service_unavailable():
 # /api/v1/definitions/generate is deliberately not card-scoped: the Add flow
 # in both clients calls it on a term that hasn't been saved as a card yet,
 # same endpoint the edit flow uses on an existing one's term.
-async def test_generate_endpoint_same_language(client, stub_ollama):
-    stub_ollama("a window, especially in a house")
+async def test_generate_endpoint_same_language(client, stub_ai):
+    stub_ai("a window, especially in a house")
 
     response = await client.post(
         "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
@@ -140,9 +140,9 @@ async def test_generate_endpoint_same_language(client, stub_ollama):
     assert response.json()["definition"] == "a window, especially in a house"
 
 
-async def test_generate_endpoint_never_writes_anything(client, stub_ollama):
+async def test_generate_endpoint_never_writes_anything(client, stub_ai):
     """No card, no owner state — the response is the only effect."""
-    stub_ollama("a window")
+    stub_ai("a window")
 
     response = await client.post(
         "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
@@ -153,8 +153,8 @@ async def test_generate_endpoint_never_writes_anything(client, stub_ollama):
     assert cards["total"] == 0
 
 
-async def test_generate_endpoint_blank_term_is_422(client, stub_ollama):
-    stub_ollama("unused")
+async def test_generate_endpoint_blank_term_is_422(client, stub_ai):
+    stub_ai("unused")
     response = await client.post(
         "/api/v1/definitions/generate", json={"term": "   ", "mode": "same_language"}
     )
@@ -162,9 +162,9 @@ async def test_generate_endpoint_blank_term_is_422(client, stub_ollama):
 
 
 async def test_generate_endpoint_translation_without_native_language_is_a_clear_error(
-    client, stub_ollama
+    client, stub_ai
 ):
-    stub_ollama("unused")
+    stub_ai("unused")
 
     response = await client.post(
         "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "native_language"}
@@ -173,9 +173,9 @@ async def test_generate_endpoint_translation_without_native_language_is_a_clear_
     assert "native language" in response.json()["error"]["message"].lower()
 
 
-async def test_generate_endpoint_translation_with_native_language_set(client, stub_ollama):
+async def test_generate_endpoint_translation_with_native_language_set(client, stub_ai):
     await client.patch("/api/v1/auth/me", json={"native_language": "ru"})
-    stub_ollama("окно")
+    stub_ai("окно")
 
     response = await client.post(
         "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "native_language"}
@@ -184,8 +184,8 @@ async def test_generate_endpoint_translation_with_native_language_set(client, st
     assert response.json()["definition"] == "окно"
 
 
-async def test_generate_endpoint_ollama_unreachable_is_503(client, stub_ollama):
-    stub_ollama(OllamaError("connection refused"))
+async def test_generate_endpoint_ai_cloud_unreachable_is_503(client, stub_ai):
+    stub_ai(AICloudError("connection refused"))
 
     response = await client.post(
         "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
@@ -194,8 +194,8 @@ async def test_generate_endpoint_ollama_unreachable_is_503(client, stub_ollama):
     assert response.json()["error"]["code"] == "service_unavailable"
 
 
-async def test_generate_endpoint_requires_authentication(anon_client, force_owner, stub_ollama):
-    stub_ollama("unused")
+async def test_generate_endpoint_requires_authentication(anon_client, force_owner, stub_ai):
+    stub_ai("unused")
 
     from app.api.deps import get_current_owner
     from app.main import app

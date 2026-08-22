@@ -71,6 +71,22 @@ async def test_generate_raises_on_missing_choices(monkeypatch):
         await _client().generate("define das Fenster")
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"choices": [None]},
+        {"choices": [{"message": None}]},
+        {"choices": {"message": {"content": "x"}}},
+    ],
+)
+async def test_generate_raises_on_null_or_wrong_typed_shape(monkeypatch, payload):
+    """Structurally-present but null/wrong-typed shapes raise TypeError, not
+    KeyError/IndexError — they must still surface as AICloudError, not a 500."""
+    _patch_post(monkeypatch, _FakeResponse(200, payload))
+    with pytest.raises(AICloudError):
+        await _client().generate("define das Fenster")
+
+
 async def test_generate_raises_on_empty_content(monkeypatch):
     _patch_post(
         monkeypatch,
