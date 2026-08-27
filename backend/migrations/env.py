@@ -15,7 +15,12 @@ config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: the default would switch off every
+    # logger already created, including "enka". That is invisible when
+    # `alembic upgrade` runs as its own process (the entrypoint's case), but
+    # silently kills app logging whenever migrations run in-process — which
+    # is what the test suite does in conftest.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

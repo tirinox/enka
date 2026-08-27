@@ -7,6 +7,8 @@ same seam `get_storage` uses for `LocalStorage` in `app_client`.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from app.api.deps import get_ai_client
@@ -59,6 +61,38 @@ def test_native_language_prompt_names_the_target():
 def test_native_language_prompt_asks_for_several_equivalents():
     prompt = definitions_service._build_prompt("lock", DefinitionMode.NATIVE_LANGUAGE, "ru")
     assert "2-3" in prompt
+
+
+@pytest.mark.parametrize(
+    "term",
+    ["lock", "  lock  ", "get up", "take care of", "Wie geht's"],
+)
+def test_short_terms_get_the_multi_equivalent_prompt(term):
+    assert definitions_service._is_short_term(term) is True
+    prompt = definitions_service._build_prompt(term, DefinitionMode.NATIVE_LANGUAGE, "ru")
+    assert "2-3" in prompt
+
+
+@pytest.mark.parametrize(
+    "term",
+    [
+        "I have been waiting for you",
+        "It is raining.",
+        "Stop! Look around.",
+        "Wie geht es dir heute?",
+        "",
+        "   ",
+    ],
+)
+def test_sentences_get_the_single_translation_prompt(term):
+    assert definitions_service._is_short_term(term) is False
+    prompt = definitions_service._build_prompt(term, DefinitionMode.NATIVE_LANGUAGE, "ru")
+    assert "2-3" not in prompt
+    assert "one faithful translation" in prompt
+
+
+def test_trailing_period_does_not_make_a_word_a_sentence():
+    assert definitions_service._is_short_term("lock.") is True
 
 
 # ------------------------------------------------------------- sanitizing --
@@ -210,3 +244,79 @@ async def test_generate_endpoint_requires_authentication(anon_client, force_owne
         "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
     )
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------- logging --
+@pytest.fixture
+def enka_logs():
+    """Collects everything the "enka" logger emits during the test.
+
+    Deliberately not `caplog`: the app's `setup_logging()` rebuilds the root
+    handlers, so whether records reach caplog's handler depends on which
+    tests ran first. A handler on the "enka" logger itself sidesteps all of
+    that and captures the same records either way.
+    """
+    records: list[logging.LogRecord] = []
+
+    class _Collect(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    logger = logging.getLogger("enka")
+    handler = _Collect()
+    previous_level = logger.level
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+    try:
+        yield records
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous_level)
+
+
+def _text(records: list[logging.LogRecord]) -> str:
+    return "\n".join(record.getMessage() for record in records)
+
+
+async def test_success_is_logged_with_the_prompt_kind_and_result(enka_logs):
+    client = _FakeAIClient("замок, запирать")
+    await definitions_service.generate_definition(
+        client, "lock", DefinitionMode.NATIVE_LANGUAGE, "ru"
+    )
+
+    logged = _text(enka_logs)
+    assert "prompt=equivalents" in logged
+    assert "ok in" in logged
+    assert "замок, запирать" in logged
+    # The prompt text itself is DEBUG-level, but must be there when DEBUG is on.
+    assert "2-3" in logged
+
+
+async def test_sentence_translation_logs_the_other_prompt_kind(enka_logs):
+    client = _FakeAIClient("Я ждал тебя")
+    await definitions_service.generate_definition(
+        client, "I have been waiting for you", DefinitionMode.NATIVE_LANGUAGE, "ru"
+    )
+    assert "prompt=sentence" in _text(enka_logs)
+
+
+async def test_failure_is_logged_with_the_reason(enka_logs):
+    client = _FakeAIClient(AICloudError("connection refused"))
+    with pytest.raises(ServiceUnavailableError):
+        await definitions_service.generate_definition(
+            client, "lock", DefinitionMode.NATIVE_LANGUAGE, "ru"
+        )
+
+    logged = _text(enka_logs)
+    assert "failed after" in logged
+    assert "connection refused" in logged
+    assert any(record.levelno == logging.WARNING for record in enka_logs)
+
+
+async def test_empty_result_is_logged_as_a_warning(enka_logs):
+    client = _FakeAIClient("   ")
+    with pytest.raises(ServiceUnavailableError):
+        await definitions_service.generate_definition(
+            client, "lock", DefinitionMode.NATIVE_LANGUAGE, "ru"
+        )
+    assert "empty" in _text(enka_logs)

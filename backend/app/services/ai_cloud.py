@@ -11,7 +11,16 @@ AI_MODEL, AI_API_KEY), not a code change.
 
 from __future__ import annotations
 
+import logging
+
 import httpx
+
+logger = logging.getLogger("enka")
+
+#: Provider error bodies are short ("Insufficient Balance", "invalid api
+#: key"); cap anyway so a provider returning an HTML error page can't dump
+#: kilobytes into the log.
+_MAX_LOGGED_BODY = 500
 
 
 class AICloudError(Exception):
@@ -32,6 +41,12 @@ class AICloudClient:
         non-2xx status, or a response body that doesn't have the shape the
         chat-completions API documents.
         """
+        logger.debug(
+            "ai_cloud: POST %s/chat/completions model=%s prompt=%d chars",
+            self._base_url,
+            self._model,
+            len(prompt),
+        )
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
@@ -47,6 +62,18 @@ class AICloudClient:
                     },
                 )
                 response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # The status alone rarely explains a 4xx — the body is where the
+            # provider says "insufficient balance" or "invalid api key". It
+            # never echoes the Authorization header, so it is safe to log.
+            body = exc.response.text[:_MAX_LOGGED_BODY]
+            logger.warning(
+                "ai_cloud: %s returned HTTP %d: %s",
+                self._model,
+                exc.response.status_code,
+                body,
+            )
+            raise AICloudError(f"AI cloud request failed: {exc}") from exc
         except httpx.HTTPError as exc:
             raise AICloudError(f"AI cloud request failed: {exc}") from exc
 
