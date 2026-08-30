@@ -12,21 +12,24 @@ REPO="$(cd "$ROOT/.." && pwd)"
 PROJECT="$ROOT/Enka.xcodeproj"
 DD="$ROOT/build-device"
 APP="$DD/Build/Products/Debug-iphoneos/Enka.app"
-BUNDLE="com.enka.ios"
+BUNDLE="ru.tirinox.enka"
 
 # ---------------------------------------------------------------- team -----
-# The ten-character Apple Developer team id that signs the build. From the
-# environment if it is there and from .env otherwise, the way the Mac app's
-# signing identity is, so it is set once and forgotten.
+# The ten-character Apple Developer team that signs the build.
+#
+# Normally the project's own DEVELOPMENT_TEAM, which is where Xcode puts it and
+# where it has to be for Xcode to sign anything itself. IOS_DEVELOPMENT_TEAM in
+# .env overrides it, for signing with something other than what the project
+# says without editing the project to do it.
 TEAM="${IOS_DEVELOPMENT_TEAM:-$(grep -E '^IOS_DEVELOPMENT_TEAM=' "$REPO/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'"'')}"
 if [ -z "$TEAM" ]; then
+    TEAM="$(grep -m1 -E '^[[:space:]]*DEVELOPMENT_TEAM = ' "$PROJECT/project.pbxproj" 2>/dev/null \
+            | sed -E 's/.*= *([A-Za-z0-9]+);.*/\1/')"
+fi
+if [ -z "$TEAM" ]; then
     echo "!!! no signing team." >&2
-    echo "    Put IOS_DEVELOPMENT_TEAM=<team id> in .env. The teams this Mac can" >&2
-    echo "    sign with are the ones in the profiles it already holds:" >&2
-    for p in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision; do
-        [ -e "$p" ] || continue
-        security cms -D -i "$p" 2>/dev/null | plutil -extract TeamIdentifier.0 raw - 2>/dev/null
-    done | sort -u | sed 's/^/      /' >&2
+    echo "    Open $PROJECT, pick one under the target's Signing &" >&2
+    echo "    Capabilities tab, or set IOS_DEVELOPMENT_TEAM in .env." >&2
     exit 1
 fi
 
@@ -61,8 +64,14 @@ if [ -z "$UDID" ]; then
 fi
 
 echo "==> building for $UDID, team $TEAM"
+# Aimed at this device, not at `generic/platform=iOS`. The generic destination
+# builds and signs perfectly well and then fails at install with 0xe8008012,
+# "this provisioning profile cannot be installed on this device" — because a
+# profile only covers the devices it was told about, and a generic build tells
+# it about none. Naming the device is what makes -allowProvisioningUpdates
+# register it and reissue the profile to include it.
 xcodebuild -quiet -project "$PROJECT" -scheme Enka -configuration Debug \
-    -destination "generic/platform=iOS" \
+    -destination "platform=iOS,id=$UDID" \
     -derivedDataPath "$DD" \
     DEVELOPMENT_TEAM="$TEAM" \
     -allowProvisioningUpdates \
@@ -75,12 +84,19 @@ echo "==> installing"
 # here by design, and the second one works.
 if ! xcrun devicectl device install app --device "$UDID" "$APP"; then
     echo >&2
-    echo "    If that said Developer Mode is disabled: on the phone, Settings →" >&2
-    echo "    Privacy & Security → Developer Mode → on, restart it, then confirm" >&2
-    echo "    after it comes back. Run this again afterwards." >&2
+    echo "    Developer Mode disabled: on the phone, Settings → Privacy &" >&2
+    echo "    Security → Developer Mode → on, restart it, confirm after it comes" >&2
+    echo "    back, and run this again." >&2
+    echo >&2
+    echo "    0xe8008012, or a profile that does not cover this device: the" >&2
+    echo "    phone is not in the profile. Run once from Xcode (⌘R with the" >&2
+    echo "    phone selected) to register it — see ios/README.md, which says" >&2
+    echo "    why the command line cannot do that part on a free team." >&2
     exit 1
 fi
 
 echo "==> launching"
 xcrun devicectl device process launch --device "$UDID" "$BUNDLE" >/dev/null
-echo "==> done — Enka is on the phone."
+EXPIRY="$(security cms -D -i "$APP/embedded.mobileprovision" 2>/dev/null \
+          | plutil -extract ExpirationDate raw - 2>/dev/null | cut -dT -f1)"
+echo "==> done — Enka is on the phone.${EXPIRY:+ Signature good until $EXPIRY.}"

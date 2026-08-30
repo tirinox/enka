@@ -253,7 +253,7 @@ mac-clean: ## Remove the macOS build products
 IOS_PROJECT := ios/Enka.xcodeproj
 IOS_DD      := ios/build
 IOS_APP     := $(IOS_DD)/Build/Products/Debug-iphonesimulator/Enka.app
-IOS_BUNDLE  := com.enka.ios
+IOS_BUNDLE  := ru.tirinox.enka
 # Which simulator to build for and run on. Override for another one:
 #   make ios-run SIM="iPhone 17"
 SIM         ?= iPhone 17 Pro

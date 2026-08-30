@@ -27,12 +27,44 @@ when there is text to take. The split runs on every keystroke too, but only
 ever moves a field when it found *both* values — which typing cannot produce,
 so it never fights the person typing.
 
-Building for a real phone needs a signing team, which is a setting in Xcode
-rather than something the Makefile can guess:
+## On a real iPhone
 
 ```bash
-open ios/Enka.xcodeproj
+make ios-device
 ```
+
+Builds, installs over the cable and launches. It picks the wired device, so a
+phone that is also on Wi-Fi is not ambiguous, and prints the date the signature
+runs out.
+
+Getting there the first time needs three things the command line cannot do:
+
+**Trust.** Unlock the phone and tap Trust when it asks. `xcrun devicectl list
+devices` shows whether it is paired.
+
+**Developer Mode.** Settings → Privacy & Security → Developer Mode, then a
+restart, then confirm once it is back. The toggle only appears after something
+has tried to install a development build, so the first `make ios-device` failing
+here is the thing that makes it appear.
+
+**One run from Xcode.** Open the project, pick a Team under the target's Signing
+& Capabilities, select the phone, ⌘R. This registers the device and issues the
+profile — and on a *free* personal team it is the only thing that can, because
+`xcodebuild -allowProvisioningUpdates` answers "No Account for Team" for those
+from the command line however signed-in Xcode is. Once the profile is on disk
+`make ios-device` works on its own, because it no longer has to ask Apple
+anything.
+
+The phone then needs to be told the developer is not a stranger: Settings →
+General → VPN & Device Management → the certificate → Trust.
+
+A free personal team signs for **seven days** and allows three devices. When the
+week is up the app stops launching, and another `make ios-device` fixes it. A
+paid team signs for a year — worth switching to if this stops being a novelty,
+and the reason `IOS_DEVELOPMENT_TEAM` in `.env` exists.
+
+Once it is on the phone, `localhost` means the phone. `make lan` prints the
+address of the Mac to type instead.
 
 ## What is shared with the Mac
 
