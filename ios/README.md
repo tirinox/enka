@@ -78,9 +78,25 @@ fails silently on `http://192.168.1.20:8010` is worse than the exemption. Put
 the server behind HTTPS and the exemption stops being used; the app is built
 for one person and never goes near the App Store, so it costs nothing else.
 
+## Studying
+
+One card fills the screen. Tap anywhere to reveal the answer, then rate it with
+one of the four buttons along the bottom — inside the arc a thumb reaches
+without the phone changing hands. The word is set in the same serif the Mac
+uses, at whichever of four sizes fits it.
+
+Both halves of the card are laid out from the start and the answer is faded in
+rather than inserted, so revealing costs no layout. A prompt that jumped upward
+at the moment of recall would pull the eye away from the exact place the answer
+is about to appear.
+
+The scheduling, the `elapsed_ms`, the undo and the "next in 8 days" that
+follows an answer are all `StudySession`, unchanged from the Mac. The menu in
+the corner switches mode and direction and signs out.
+
 ## Where this is going
 
-Sign-in and a due count are in. Next is the study screen, and after it the
-part that all of this is for: rating a card by dragging it, with the interval
-each rating buys written on the button, and a haptic that tells the thumb what
-happened without the eyes leaving the word.
+Rating works; making it *pleasant* is next. A card should be draggable — left
+for again, right for good — with the interval each rating buys written on the
+button before it is pressed, and a haptic that tells the thumb what happened
+without the eyes leaving the word. Then audio, then adding a word from Safari.

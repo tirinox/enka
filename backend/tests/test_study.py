@@ -224,3 +224,46 @@ async def test_remaining_due_counts_down_as_you_answer(client):
         await client.post(f"/api/v1/study/{first['card']['id']}/answer", json={"rating": "easy"})
     ).json()
     assert body["remaining_due"] == 2
+
+
+async def test_next_card_says_what_each_rating_would_buy(client, card_factory):
+    await card_factory("das Fenster", "window")
+
+    intervals = (await client.get("/api/v1/study/next")).json()["intervals"]
+
+    assert set(intervals) == {"again", "hard", "good", "easy"}
+    assert all(isinstance(value, str) and value for value in intervals.values())
+    # The four are the point: a button that offered the same interval as its
+    # neighbour would be a button nobody could choose between.
+    assert len(set(intervals.values())) == 4
+
+
+async def test_previewing_intervals_does_not_schedule_the_card(client, card_factory):
+    card = await card_factory("untouched", "x")
+    before = (await client.get(f"/api/v1/cards/{card['id']}")).json()
+
+    await client.get("/api/v1/study/next?mark_shown=false")
+
+    after = (await client.get(f"/api/v1/cards/{card['id']}")).json()
+    assert after["due_at"] == before["due_at"]
+    assert after["times_shown"] == before["times_shown"]
+
+
+async def test_queued_cards_carry_intervals_too(client, card_factory):
+    await card_factory("one", "1")
+    await card_factory("two", "2")
+
+    items = (await client.get("/api/v1/study/queue")).json()["items"]
+
+    assert len(items) == 2
+    assert all(item["intervals"]["good"] for item in items)
+
+
+async def test_undo_says_what_each_rating_would_buy_again(client, card_factory):
+    card = await card_factory("second thoughts", "x")
+    await client.post(f"/api/v1/study/{card['id']}/answer", json={"rating": "easy"})
+
+    body = (await client.post(f"/api/v1/study/{card['id']}/undo")).json()
+
+    assert set(body["intervals"]) == {"again", "hard", "good", "easy"}
+    assert len(set(body["intervals"].values())) == 4

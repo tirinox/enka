@@ -253,3 +253,37 @@ def test_retrievability_decays_over_time():
 def test_rating_names_cover_the_public_api():
     assert set(srs.RATING_BY_NAME) == {"again", "hard", "good", "easy"}
     assert srs.NAME_BY_RATING[int(Rating.Again)] == "again"
+
+
+def test_preview_grows_with_the_rating():
+    """again < hard < good < easy, which is what makes four buttons a choice."""
+    card = make_card()
+    intervals = srs.preview(card)
+
+    assert intervals["again"] < intervals["hard"] < intervals["good"] < intervals["easy"]
+
+
+def test_preview_leaves_the_card_alone():
+    card = make_card()
+    before = (card.srs_state, card.srs_step, card.stability, card.difficulty, card.due_at)
+
+    srs.preview(card)
+
+    assert (card.srs_state, card.srs_step, card.stability, card.difficulty, card.due_at) == before
+
+
+def test_preview_matches_what_answering_actually_buys():
+    """The number on the button has to be the number the press delivers.
+
+    Fuzzing is what would break this, so the preview scheduler has it off; the
+    comparison here is against a review taken with fuzzing off as well, which
+    is what `enable_fuzzing=False` in the test settings already gives.
+    """
+    now = datetime.now(UTC)
+    predicted = srs.preview(make_card(), now)["good"]
+
+    card = make_card()
+    srs.review(card, Rating.Good, reviewed_at=now)
+    actual = (card.due_at - now).total_seconds()
+
+    assert actual == pytest.approx(predicted, rel=0.1)

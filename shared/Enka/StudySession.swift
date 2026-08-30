@@ -217,7 +217,13 @@ final class StudySession: ObservableObject {
                 lastInterval = nil
                 remainingDue = (try? await session.run { try await $0.remainingDue() }) ?? remainingDue
                 phase = .card(
-                    StudyCard(card: response.card, direction: resolveDirection(for: response.card), mode: mode, remainingDue: remainingDue),
+                    StudyCard(
+                        card: response.card,
+                        direction: resolveDirection(for: response.card),
+                        mode: mode,
+                        remainingDue: remainingDue,
+                        intervals: response.intervals
+                    ),
                     revealed: true
                 )
                 shownAt = Date()

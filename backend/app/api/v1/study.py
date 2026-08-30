@@ -17,6 +17,7 @@ from app.schemas.common import TagMode
 from app.schemas.study import (
     AnswerRequest,
     AnswerResponse,
+    IntervalPreview,
     StudyCard,
     StudyDirection,
     StudyMode,
@@ -121,6 +122,10 @@ def _humanize(seconds: float) -> str:
     return f"{days / 365.25:.1f} years"
 
 
+def _intervals(card: Card, now: datetime) -> IntervalPreview:
+    return IntervalPreview(**{name: _humanize(s) for name, s in srs.preview(card, now).items()})
+
+
 @router.get(
     "/next",
     response_model=StudyCard,
@@ -159,6 +164,7 @@ async def next_card(
         direction=_resolve_direction(card, direction),
         mode=used_mode,
         remaining_due=await _due_count(session, owner.id, now),
+        intervals=_intervals(card, now),
     )
 
 
@@ -187,6 +193,7 @@ async def queue(
                 direction=_resolve_direction(card, direction),
                 mode=used_mode,
                 remaining_due=remaining,
+                intervals=_intervals(card, now),
             )
             for card in rows
         ],
@@ -259,4 +266,8 @@ async def undo(card_id: uuid.UUID, owner: OwnerDep, session: SessionDep) -> Undo
     srs.undo(card, log)
     await session.commit()
     await session.refresh(card, ["tags", "audio_clips"])
-    return UndoResponse(card=card_service.card_to_out(card), undone_review_id=log.id)
+    return UndoResponse(
+        card=card_service.card_to_out(card),
+        undone_review_id=log.id,
+        intervals=_intervals(card, datetime.now(UTC)),
+    )

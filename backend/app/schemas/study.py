@@ -37,6 +37,20 @@ class Rating(str, enum.Enum):
     EASY = "easy"
 
 
+class IntervalPreview(BaseModel):
+    """What each rating would buy, in words, before it is pressed.
+
+    The four buttons are the only feedback the algorithm ever gives, and it
+    arrives after the decision it should have informed. Sending the intervals
+    with the card puts them on the buttons instead.
+    """
+
+    again: str
+    hard: str
+    good: str
+    easy: str
+
+
 class StudyCard(BaseModel):
     card: CardOut
     direction: ReviewDirection = Field(
@@ -44,6 +58,9 @@ class StudyCard(BaseModel):
     )
     mode: StudyMode
     remaining_due: int = Field(description="Cards still due after this one.")
+    intervals: IntervalPreview = Field(
+        description="When each rating would bring this card back, humanised."
+    )
 
 
 class StudyQueue(BaseModel):
@@ -73,3 +90,9 @@ class AnswerResponse(BaseModel):
 class UndoResponse(BaseModel):
     card: CardOut
     undone_review_id: uuid.UUID
+    intervals: IntervalPreview = Field(
+        description=(
+            "What each rating would buy now that the answer is undone. Sent "
+            "because undo exists in order to answer the card again."
+        )
+    )

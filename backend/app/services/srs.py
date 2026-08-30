@@ -29,8 +29,7 @@ RATING_BY_NAME: dict[str, Rating] = {
 NAME_BY_RATING: dict[int, str] = {int(v): k for k, v in RATING_BY_NAME.items()}
 
 
-@functools.lru_cache
-def get_scheduler() -> Scheduler:
+def _build_scheduler(*, enable_fuzzing: bool) -> Scheduler:
     return Scheduler(
         desired_retention=settings.fsrs_desired_retention,
         learning_steps=tuple(timedelta(minutes=m) for m in settings.fsrs_learning_steps_minutes),
@@ -38,8 +37,28 @@ def get_scheduler() -> Scheduler:
             timedelta(minutes=m) for m in settings.fsrs_relearning_steps_minutes
         ),
         maximum_interval=settings.fsrs_maximum_interval,
-        enable_fuzzing=settings.fsrs_enable_fuzzing,
+        enable_fuzzing=enable_fuzzing,
     )
+
+
+@functools.lru_cache
+def get_scheduler() -> Scheduler:
+    return _build_scheduler(enable_fuzzing=settings.fsrs_enable_fuzzing)
+
+
+@functools.lru_cache
+def get_preview_scheduler() -> Scheduler:
+    """The scheduler used to answer "what would this rating buy?".
+
+    Fuzzing is off here, and only here. Its job is to stop a day's worth of
+    cards all coming back on the same later day, which it does by moving each
+    interval a few percent at random — right when an answer is being recorded,
+    and wrong for a number read *before* it. Fuzzed, the same button would
+    offer "8 days" now and "9 days" a moment later, for no reason the person
+    reading it could see. So a preview is the unfuzzed centre, and the answer
+    lands within a few percent of what was on the button.
+    """
+    return _build_scheduler(enable_fuzzing=False)
 
 
 def _fsrs_card_id(card: Card) -> int:
@@ -79,6 +98,26 @@ def retrievability(card: Card, at: datetime | None = None) -> float | None:
     if card.last_review_at is None or card.stability is None:
         return None
     return get_scheduler().get_card_retrievability(to_fsrs_card(card), current_datetime=at)
+
+
+def preview(card: Card, at: datetime | None = None) -> dict[str, float]:
+    """Seconds until each of the four ratings would bring this card back.
+
+    Records nothing and mutates nothing: this is what the four buttons are
+    labelled with, and it is asked before anybody has decided which to press.
+
+    A fresh ``to_fsrs_card`` per rating rather than one card reused across the
+    four. The library copies its input before scheduling today, and the cost of
+    not depending on that is three extra object constructions.
+    """
+    now = (at or datetime.now(UTC)).astimezone(UTC)
+    scheduler = get_preview_scheduler()
+
+    intervals: dict[str, float] = {}
+    for name, rating in RATING_BY_NAME.items():
+        scheduled, _ = scheduler.review_card(to_fsrs_card(card), rating, review_datetime=now)
+        intervals[name] = (scheduled.due - now).total_seconds()
+    return intervals
 
 
 def review(

@@ -7,8 +7,8 @@ struct RootView: View {
     var body: some View {
         Group {
             switch session.state {
-            case .connected(let name):
-                HomeView(name: name)
+            case .connected:
+                StudyView()
             case .connecting:
                 // `restore()` runs before the first frame, so this is what a
                 // cold launch with a token in the keychain actually shows.

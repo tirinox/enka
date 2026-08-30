@@ -194,14 +194,37 @@ struct Tag: Decodable, Identifiable, Hashable {
 
 // MARK: - Study
 
+/// What each rating would buy, in words, asked before one is pressed.
+///
+/// The interval is the only feedback FSRS ever gives, and until the server
+/// started sending it with the card it arrived *after* the decision it should
+/// have informed. Optional here because a client can be newer than the server
+/// it is pointed at, and a missing preview costs a label rather than a card.
+struct IntervalPreview: Decodable, Hashable {
+    let again: String
+    let hard: String
+    let good: String
+    let easy: String
+
+    subscript(rating: Rating) -> String {
+        switch rating {
+        case .again: return again
+        case .hard: return hard
+        case .good: return good
+        case .easy: return easy
+        }
+    }
+}
+
 struct StudyCard: Decodable {
     let card: Card
     let direction: ReviewDirection
     let mode: StudyMode
     let remainingDue: Int
+    let intervals: IntervalPreview?
 
     enum CodingKeys: String, CodingKey {
-        case card, direction, mode
+        case card, direction, mode, intervals
         case remainingDue = "remaining_due"
     }
 }
@@ -243,6 +266,7 @@ struct AnswerResponse: Decodable {
 
 struct UndoResponse: Decodable {
     let card: Card
+    let intervals: IntervalPreview?
 }
 
 // MARK: - Stats
