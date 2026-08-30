@@ -12,20 +12,44 @@ final class NotchPanel: NSPanel {
     ///
     /// `.nonactivatingPanel` is what makes that affordable: the panel gets
     /// keyboard input without the app ever becoming active.
-    var acceptsKeyboard = false {
-        didSet {
-            guard acceptsKeyboard != oldValue else { return }
-            if acceptsKeyboard {
-                makeKey()
-            } else if isKeyWindow {
-                // There is no supported way to simply hand key status back, and
-                // this app owns no other window to pass it to. Ordering out and
-                // straight back in resigns it; the panel is borderless and the
-                // round trip happens within one pass, so nothing flickers.
-                orderOut(nil)
-                orderFrontRegardless()
-            }
-        }
+    ///
+    /// Set through `claimKeyboard` and `releaseKeyboard` rather than directly:
+    /// this flag is what we *want*, and it can quietly disagree with what the
+    /// window server has actually given us.
+    private(set) var acceptsKeyboard = false
+
+    /// Take the keyboard now, whether or not the flag already says we have it.
+    ///
+    /// Asking on the flag's edge is not enough, because the flag and key
+    /// status can come apart: the panel can stop being key without anything
+    /// telling us — losing it to another app's own non-activating panel, or a
+    /// `makeKey` that landed while a menu still owned the event loop and so
+    /// never took. The flag is then already `true`, and a panel that believes
+    /// it holds the keyboard has no way left to ask for it again. What that
+    /// costs is a tab whose fields cannot be typed into, whose keystrokes go
+    /// to whatever is really frontmost, and which comes back only by leaving
+    /// it and returning — not a thing anyone should have to know.
+    ///
+    /// So the question asked here is the one that decides it: is this window
+    /// key? `makeKey` on a window that already is, is a no-op.
+    func claimKeyboard() {
+        acceptsKeyboard = true
+        guard !isKeyWindow else { return }
+        makeKey()
+    }
+
+    /// Give it back. Mirror of `claimKeyboard`, and disagreeing the same way:
+    /// the panel can still be key after something else has decided it should
+    /// not be.
+    func releaseKeyboard() {
+        acceptsKeyboard = false
+        guard isKeyWindow else { return }
+        // There is no supported way to simply hand key status back, and this
+        // app owns no other window to pass it to. Ordering out and straight
+        // back in resigns it; the panel is borderless and the round trip
+        // happens within one pass, so nothing flickers.
+        orderOut(nil)
+        orderFrontRegardless()
     }
 
     override var canBecomeKey: Bool { acceptsKeyboard }

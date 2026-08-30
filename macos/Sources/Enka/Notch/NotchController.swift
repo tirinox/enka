@@ -105,7 +105,7 @@ final class NotchController {
     func teardown() {
         pointer.stop()
         viewModel?.stop()
-        panel?.acceptsKeyboard = false
+        panel?.releaseKeyboard()
         panel?.orderOut(nil)
     }
 
@@ -133,7 +133,7 @@ final class NotchController {
         closeActiveRectWork?.cancel()
         pointerAwayWork?.cancel()
         cancellables.removeAll()
-        panel?.acceptsKeyboard = false
+        panel?.releaseKeyboard()
         panel?.orderOut(nil)
         panel?.contentView = nil
         panel = nil
@@ -163,7 +163,16 @@ final class NotchController {
         // also how the study tab earns the keyboard at all — see
         // `NotchViewModel.Tab.needsKeyboard`.
         panel.onPress = { [weak self] in
-            self?.viewModel?.pressedInside()
+            guard let self else { return }
+            self.viewModel?.pressedInside()
+            // Then say it again to the panel directly. `pressedInside` only
+            // sets `wantsKeyboard`, and the subscription below rides the
+            // *edge* of that — so a claim that is already true reaches
+            // nothing, and a panel that has quietly stopped being key can
+            // never be handed it back. A press is the one unambiguous ask
+            // there is; it should not depend on what the flag happened to
+            // already say.
+            if self.viewModel?.wantsKeyboard == true { self.panel?.claimKeyboard() }
         }
         panel.onKeyDown = { [weak self] event in
             self?.handle(event) ?? false
@@ -236,6 +245,24 @@ final class NotchController {
         // click-outside to catch, but losing key status says the same. The tab
         // stays as it was — only the claim on the keyboard is dropped.
         NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification, object: panel)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.viewModel?.wantsKeyboard = false }
+            }
+            .store(in: &cancellables)
+
+        // The same loss, by the route that does not announce itself. Key
+        // status is a window-level fact, and the panel is told when it is
+        // taken by an ordinary app. It is not reliably told when the taker is
+        // another non-activating panel — Spotlight, a launcher, a chat popup —
+        // which is exactly the kind of thing one reaches for mid-word. Left
+        // there, `wantsKeyboard` stays true for a keyboard we no longer have,
+        // and every later claim is a claim we already believe we hold.
+        //
+        // Whoever came to the front, if it is not us, the keyboard is theirs.
+        NSWorkspace.shared.notificationCenter
+            .publisher(for: NSWorkspace.didActivateApplicationNotification)
+            .compactMap { $0.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication }
+            .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
             .sink { [weak self] _ in
                 MainActor.assumeIsolated { self?.viewModel?.wantsKeyboard = false }
             }
@@ -353,7 +380,11 @@ final class NotchController {
             setOpen(true)
             pointer.setInside(true)
         }
-        panel?.acceptsKeyboard = wants
+        if wants {
+            panel?.claimKeyboard()
+        } else {
+            panel?.releaseKeyboard()
+        }
         // What was typed stays: clicking away to look something up should not
         // be the same as throwing the word out.
         if !wants { scheduleCollapseIfPointerAway() }
