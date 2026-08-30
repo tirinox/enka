@@ -60,6 +60,15 @@ final class StudySession: ObservableObject {
         }
     }
 
+    /// Net answers this session has put on the server: one up per answer, one
+    /// down per undo.
+    ///
+    /// It exists so a screen showing "reviews today" can move by one without
+    /// refetching `/stats`, which is a dozen queries and a leech list to learn
+    /// that a number went up by one. The screen seeds itself from the server
+    /// and adds this.
+    @Published private(set) var recordedAnswers = 0
+
     /// The card the last answer was recorded against, and the only thing undo
     /// can act on. Cleared once undone, so a second press cannot walk backwards
     /// through a history the panel does not keep.
@@ -184,6 +193,7 @@ final class StudySession: ObservableObject {
                 lastInterval = response.intervalHuman
                 remainingDue = response.remainingDue
                 undoableCard = response.card
+                recordedAnswers += 1
                 await loadNext()
             } catch is CancellationError {
                 return
@@ -215,6 +225,7 @@ final class StudySession: ObservableObject {
                 guard !Task.isCancelled else { return }
                 undoableCard = nil
                 lastInterval = nil
+                recordedAnswers -= 1
                 remainingDue = (try? await session.run { try await $0.remainingDue() }) ?? remainingDue
                 phase = .card(
                     StudyCard(

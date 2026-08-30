@@ -257,6 +257,10 @@ ios-run: ios ## Build the iOS app, then install and launch it on the simulator
 	@xcrun simctl launch booted $(IOS_BUNDLE)
 	@echo "Enka is running on $(SIM)."
 
+.PHONY: ios-icon
+ios-icon: ## Re-render the iOS app icon from ios/Scripts/make-icon.swift
+	cd ios && swift Scripts/make-icon.swift Enka/Assets.xcassets/AppIcon.appiconset
+
 .PHONY: ios-clean
 ios-clean: ## Remove the iOS build products
 	rm -rf $(IOS_DD)

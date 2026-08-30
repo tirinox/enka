@@ -3,6 +3,7 @@ from __future__ import annotations
 import itertools
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Integer, and_, case, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,9 +31,19 @@ def _count_if(condition) -> object:
 
 
 async def collect_stats(
-    session: AsyncSession, owner_id: uuid.UUID, *, leech_limit: int = 10
+    session: AsyncSession, owner_id: uuid.UUID, *, leech_limit: int = 10, tz: str = "UTC"
 ) -> StatsResponse:
+    """Everything the stats page shows, with days counted in ``tz``.
+
+    A "day" is the one thing here that is not a property of the data. Bucketing
+    reviews by UTC date puts a session studied at one in the morning on the day
+    before, which is defensible for a chart and wrong for a streak — the number
+    would reset three hours into somebody's night. So the caller says which
+    timezone its days are in, and UTC stays the default for the clients that
+    never asked.
+    """
     now = datetime.now(UTC)
+    today = now.astimezone(ZoneInfo(tz)).date()
     end_of_today = datetime.combine(now.date(), datetime.max.time(), tzinfo=UTC)
 
     has_definition = and_(Card.definition.is_not(None), func.btrim(Card.definition) != "")
@@ -81,9 +92,9 @@ async def collect_stats(
     wrong = int(card_row.wrong or 0)
     answered = correct + wrong
 
-    daily = await _daily_activity(session, owner_id, since=now - timedelta(days=30))
-    all_days = await _review_days(session, owner_id)
-    current_streak, longest_streak = _streaks(all_days, today=now.date())
+    daily = await _daily_activity(session, owner_id, since=now - timedelta(days=30), tz=tz)
+    all_days = await _review_days(session, owner_id, tz=tz)
+    current_streak, longest_streak = _streaks(all_days, today=today)
     leeches = await _leeches(session, owner_id, limit=leech_limit)
 
     return StatsResponse(
@@ -115,6 +126,7 @@ async def collect_stats(
             avg_star_rating=_maybe_float(card_row.avg_star),
         ),
         reviews_last_30_days=daily,
+        reviews_today=next((d.reviews for d in daily if d.day == today), 0),
         current_streak_days=current_streak,
         longest_streak_days=longest_streak,
         leeches=leeches,
@@ -127,9 +139,9 @@ def _maybe_float(value: object) -> float | None:
 
 
 async def _daily_activity(
-    session: AsyncSession, owner_id: uuid.UUID, *, since: datetime
+    session: AsyncSession, owner_id: uuid.UUID, *, since: datetime, tz: str = "UTC"
 ) -> list[DailyActivity]:
-    day = func.date_trunc("day", func.timezone("UTC", ReviewLog.reviewed_at))
+    day = func.date_trunc("day", func.timezone(tz, ReviewLog.reviewed_at))
     rows = (
         await session.execute(
             select(
@@ -151,8 +163,10 @@ async def _daily_activity(
     ]
 
 
-async def _review_days(session: AsyncSession, owner_id: uuid.UUID) -> list[date]:
-    day = func.date_trunc("day", func.timezone("UTC", ReviewLog.reviewed_at))
+async def _review_days(
+    session: AsyncSession, owner_id: uuid.UUID, *, tz: str = "UTC"
+) -> list[date]:
+    day = func.date_trunc("day", func.timezone(tz, ReviewLog.reviewed_at))
     rows = (
         await session.execute(
             select(day.label("day"))

@@ -70,6 +70,23 @@ The ratings are the part that has to agree. They are the only place in any
 client where colour carries meaning rather than emphasis, so a red *Again*
 here and an orange one in the browser would be a mis-press waiting to happen.
 
+## The icon
+
+[`Scripts/make-icon.swift`](Scripts/make-icon.swift) draws it — no design tool
+in the loop, the same arrangement the Mac's icon uses:
+
+```bash
+make ios-icon
+```
+
+That rewrites `Enka/Assets.xcassets/AppIcon.appiconset` from one 1024 canvas,
+and Xcode derives every size the system asks for. The Mac's icon is two cards
+lying flat with the notch cut into the top edge, because that is where the Mac
+app lives. A phone has no notch worth pointing at, so the cards stand upright —
+the way one is held here — and a third joins the fan, because what the phone
+shows is a queue. The two behind are dimmed rather than outlined, so at the
+size a home screen draws it the whole thing stays one silhouette.
+
 ## Plain HTTP
 
 `Info.plist` turns off App Transport Security. A self-hosted Enka on a home

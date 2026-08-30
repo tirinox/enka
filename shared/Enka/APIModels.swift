@@ -329,6 +329,9 @@ struct StatsResponse: Decodable {
     let study: StudyStats
     let schedule: ScheduleStats
     let reviewsLast30Days: [DailyActivity]
+    /// Answers given today, in the timezone the request asked for. Zero on a
+    /// fresh day, which the daily buckets cannot say — they omit empty days.
+    let reviewsToday: Int
     let currentStreakDays: Int
     let longestStreakDays: Int
     let leeches: [LeechCard]
@@ -336,6 +339,7 @@ struct StatsResponse: Decodable {
     enum CodingKeys: String, CodingKey {
         case collection, study, schedule, leeches
         case reviewsLast30Days = "reviews_last_30_days"
+        case reviewsToday = "reviews_today"
         case currentStreakDays = "current_streak_days"
         case longestStreakDays = "longest_streak_days"
     }

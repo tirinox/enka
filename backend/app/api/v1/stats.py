@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Query
 
 from app.api.deps import OwnerDep, SessionDep
+from app.core.errors import ValidationError
 from app.schemas.stats import HeatmapResponse, StatsResponse
 from app.services import stats as stats_service
 
@@ -20,8 +22,26 @@ async def get_stats(
     owner: OwnerDep,
     session: SessionDep,
     leech_limit: Annotated[int, Query(ge=0, le=100)] = 10,
+    tz: Annotated[
+        str,
+        Query(
+            description=(
+                "IANA timezone the day boundaries are counted in, e.g. "
+                "`Europe/Moscow`. Affects the streak, `reviews_today` and the "
+                "daily buckets — nothing else."
+            )
+        ),
+    ] = "UTC",
 ) -> StatsResponse:
-    return await stats_service.collect_stats(session, owner.id, leech_limit=leech_limit)
+    # Checked here rather than left to Postgres: `timezone()` raises on an
+    # unknown name deep inside a query, which surfaces as a 500 for what is
+    # plainly a bad request.
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValidationError("Unknown timezone.", {"tz": tz}) from None
+
+    return await stats_service.collect_stats(session, owner.id, leech_limit=leech_limit, tz=tz)
 
 
 @router.get(

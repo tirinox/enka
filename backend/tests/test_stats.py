@@ -221,3 +221,49 @@ async def test_backdated_reviews_land_on_the_right_day(client, card_factory):
     body = (await client.get("/api/v1/stats")).json()
     days = {entry["day"] for entry in body["reviews_last_30_days"]}
     assert yesterday.date().isoformat() in days
+
+
+async def test_reviews_today_counts_answers_given_today(client, card_factory):
+    card = await card_factory("today", "x")
+    assert (await client.get("/api/v1/stats")).json()["reviews_today"] == 0
+
+    await client.post(f"/api/v1/study/{card['id']}/answer", json={"rating": "good"})
+
+    body = (await client.get("/api/v1/stats")).json()
+    assert body["reviews_today"] == 1
+    assert body["current_streak_days"] == 1
+
+
+async def test_undone_answers_stop_counting_towards_today(client, card_factory):
+    card = await card_factory("second thoughts", "x")
+    await client.post(f"/api/v1/study/{card['id']}/answer", json={"rating": "good"})
+    await client.post(f"/api/v1/study/{card['id']}/undo")
+
+    assert (await client.get("/api/v1/stats")).json()["reviews_today"] == 0
+
+
+async def test_days_are_counted_in_the_requested_timezone(client, card_factory):
+    """A review just before UTC midnight already belongs to tomorrow in Moscow.
+
+    This is the whole reason the parameter exists: bucketing by UTC would reset
+    the day's counter three hours into somebody's night.
+    """
+    card = await card_factory("late", "x")
+    late = datetime.now(UTC).replace(hour=23, minute=30, second=0, microsecond=0)
+    await client.post(
+        f"/api/v1/study/{card['id']}/answer",
+        json={"rating": "good", "reviewed_at": late.isoformat()},
+    )
+
+    utc_day = (await client.get("/api/v1/stats")).json()["reviews_last_30_days"][-1]["day"]
+    moscow_day = (await client.get("/api/v1/stats?tz=Europe/Moscow")).json()[
+        "reviews_last_30_days"
+    ][-1]["day"]
+
+    assert moscow_day > utc_day
+
+
+async def test_an_unknown_timezone_is_a_bad_request(client):
+    response = await client.get("/api/v1/stats?tz=Mars/Olympus_Mons")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"

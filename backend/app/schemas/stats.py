@@ -56,6 +56,9 @@ class StatsResponse(BaseModel):
     study: StudyStats
     schedule: ScheduleStats
     reviews_last_30_days: list[DailyActivity]
+    reviews_today: int = Field(
+        description="Answers given today, in the requested timezone. Zero on a fresh day."
+    )
     current_streak_days: int = Field(description="Consecutive days up to today with a review.")
     longest_streak_days: int
     leeches: list[LeechCard] = Field(description="Cards you keep forgetting, worst first.")

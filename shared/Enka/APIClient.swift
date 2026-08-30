@@ -328,8 +328,11 @@ actor APIClient {
 
     // Stats
 
-    func stats() async throws -> StatsResponse {
-        try await send("stats", query: [("leech_limit", "5")])
+    /// `timeZone` decides where a day starts, and so what the streak and
+    /// today's count mean. The server defaults to UTC for the clients that
+    /// never asked; anything showing a person their own day should pass theirs.
+    func stats(timeZone: TimeZone = .current) async throws -> StatsResponse {
+        try await send("stats", query: [("leech_limit", "5"), ("tz", timeZone.identifier)])
     }
 
     // Audio
