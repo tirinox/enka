@@ -281,9 +281,15 @@ ios-run: ios ## Build the iOS app, then install and launch it on the simulator
 ios-icon: ## Re-render the iOS app icon from ios/Scripts/make-icon.swift
 	cd ios && swift Scripts/make-icon.swift Enka/Assets.xcassets/AppIcon.appiconset
 
+.PHONY: ios-device
+ios-device: ## Build and install on the iPhone connected by cable
+	@# Needs IOS_DEVELOPMENT_TEAM in .env, and Developer Mode on the phone.
+	@# The script says so if either is missing.
+	./ios/Scripts/device.sh
+
 .PHONY: ios-clean
 ios-clean: ## Remove the iOS build products
-	rm -rf $(IOS_DD)
+	rm -rf $(IOS_DD) ios/build-device
 
 # ---------------------------------------------------------------- misc -----
 .PHONY: lock
