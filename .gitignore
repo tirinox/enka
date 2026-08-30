@@ -238,6 +238,7 @@ web/*.tsbuildinfo
 .swiftpm/
 macos/build/
 ios/build/
+ios/build-device/
 Package.resolved
 macos/*.xcodeproj/
 macos/*.xcworkspace/

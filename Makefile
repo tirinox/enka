@@ -143,16 +143,22 @@ secret: ## Print the access secret to type into a client
 	@echo "$(call env_get,ENKA_ACCESS_SECRET)"
 
 .PHONY: lan
-lan: ## Print the Bonjour URL a phone on the same Wi-Fi can connect to
+lan: ## Print a paste-ready sign-in URL for a phone on the same Wi-Fi
 	@# LocalHostName is the name this Mac advertises over mDNS, so every Apple
 	@# device on the network resolves <name>.local with no DNS server involved.
 	@# The numeric address comes along for anything that does not speak Bonjour.
+	@#
+	@# The secret rides in the fragment rather than the query, because a
+	@# fragment is never sent to the server and so never lands in an access
+	@# log. PastedCredentials in shared/ reads exactly this shape and fills
+	@# both sign-in fields from one paste.
 	@port=$(or $(API_PORT),8000); \
 	 host=$$(scutil --get LocalHostName 2>/dev/null || hostname -s); \
+	 secret="$(call env_get,ENKA_ACCESS_SECRET)"; \
 	 url="http://$$host.local:$$port"; \
-	 echo "$$url"; \
+	 echo "$$url#$$secret"; \
 	 ip=$$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null); \
-	 [ -n "$$ip" ] && echo "http://$$ip:$$port  (if .local does not resolve)"; \
+	 [ -n "$$ip" ] && echo "http://$$ip:$$port#$$secret  (if .local does not resolve)"; \
 	 curl -fsS -m 2 -o /dev/null "$$url/health" \
 	   || echo "Not answering there yet — is 'make up' running?"
 
