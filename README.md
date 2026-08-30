@@ -9,13 +9,15 @@ word when you meet it, fill in the meaning later. Scheduling uses
 [FSRS](https://github.com/open-spaced-repetition/py-fsrs), the algorithm behind
 modern Anki.
 
-Three parts, all talking to the same API.
+Three clients and a server, all talking to the same API.
 
 ```
 enka/
 ├── backend/     ← FastAPI + Postgres
 ├── web/         ← Vue 3 client
-└── macos/       ← a panel that lives in the notch
+├── shared/      ← Swift the two Apple clients both compile
+├── macos/       ← a panel that lives in the notch
+└── ios/         ← a phone client, built for the thumb
 ```
 
 ## Quick start
@@ -62,6 +64,17 @@ keys study a card; `Add` captures a word in one line while you are reading
 something else; `Tags` is the one place it edits the collection. `make
 mac-install` puts it in `/Applications`. See
 [`macos/README.md`](macos/README.md).
+
+## The iOS app
+
+```bash
+make ios-run
+```
+
+Builds for the simulator and launches it. The same secret signs it in, and the
+same Swift underneath: `shared/` holds the API client, the session and the
+study logic, and both Apple clients compile it from one copy. See
+[`ios/README.md`](ios/README.md).
 
 ## How auth works
 

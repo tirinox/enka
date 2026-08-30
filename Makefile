@@ -199,7 +199,7 @@ mac-run: mac ## Build the macOS app and (re)start it from macos/build
 
 .PHONY: mac-dev
 mac-dev: ## Compile the macOS app without bundling it (fast type-check loop)
-	cd macos && swift build
+	swift build
 
 .PHONY: mac-icon
 mac-icon: ## Re-render macos/Resources/AppIcon.icns from Scripts/make-icon.swift
@@ -227,7 +227,39 @@ mac-uninstall: ## Quit and remove /Applications/Enka.app
 
 .PHONY: mac-clean
 mac-clean: ## Remove the macOS build products
-	rm -rf macos/.build macos/build
+	rm -rf .build macos/build
+
+# --------------------------------------------------------------- iOS app ----
+IOS_PROJECT := ios/Enka.xcodeproj
+IOS_DD      := ios/build
+IOS_APP     := $(IOS_DD)/Build/Products/Debug-iphonesimulator/Enka.app
+IOS_BUNDLE  := com.enka.ios
+# Which simulator to build for and run on. Override for another one:
+#   make ios-run SIM="iPhone 17"
+SIM         ?= iPhone 17 Pro
+
+.PHONY: ios
+ios: ## Build the iOS app for the simulator into ios/build
+	@# -quiet, because xcodebuild's default output is a thousand lines of
+	@# compiler invocations and this hides all of them but the errors.
+	xcodebuild -quiet -project $(IOS_PROJECT) -scheme Enka -configuration Debug \
+		-destination 'platform=iOS Simulator,name=$(SIM)' \
+		-derivedDataPath $(IOS_DD) build
+
+.PHONY: ios-run
+ios-run: ios ## Build the iOS app, then install and launch it on the simulator
+	@# Booting a device that is already booted is an error, as is opening
+	@# Simulator.app when it is open. Both are swallowed: running this twice
+	@# in a row is the normal case, not a mistake.
+	-@xcrun simctl boot "$(SIM)" 2>/dev/null || true
+	-@open -a Simulator
+	@xcrun simctl install booted "$(IOS_APP)"
+	@xcrun simctl launch booted $(IOS_BUNDLE)
+	@echo "Enka is running on $(SIM)."
+
+.PHONY: ios-clean
+ios-clean: ## Remove the iOS build products
+	rm -rf $(IOS_DD)
 
 # ---------------------------------------------------------------- misc -----
 .PHONY: lock

@@ -9,13 +9,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The package manifest lives at the repository root, one level above
+# macos/, because shared/Enka is compiled into the iOS app as well. The
+# bundle still gets assembled here, in macos/build.
+PACKAGE="$(cd "$ROOT/.." && pwd)"
 CONFIG="${1:-release}"
 APP="$ROOT/build/Enka.app"
 VERSION="$(sed -n 's/^VERSION=//p' "$ROOT/Scripts/version" 2>/dev/null || echo 0.1.0)"
 
 echo "==> swift build -c $CONFIG"
-swift build -c "$CONFIG" --package-path "$ROOT"
-BIN="$(swift build -c "$CONFIG" --package-path "$ROOT" --show-bin-path)/Enka"
+swift build -c "$CONFIG" --package-path "$PACKAGE"
+BIN="$(swift build -c "$CONFIG" --package-path "$PACKAGE" --show-bin-path)/Enka"
 
 echo "==> assembling $APP"
 rm -rf "$APP"

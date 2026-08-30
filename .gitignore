@@ -227,18 +227,25 @@ web/.vite/
 web/*.tsbuildinfo
 
 # ---------------------------------------------------------------------------
-# macOS client (Swift)
+# Swift clients (macos/, ios/, shared/)
 # ---------------------------------------------------------------------------
 
-# SwiftPM build products and resolved dependency graph. `build/` is already
-# ignored above by the Python section, which is where Scripts/bundle.sh puts
-# Enka.app — named here too so the reason is written down next to the rest.
-macos/.build/
-macos/.swiftpm/
+# SwiftPM build products and resolved dependency graph. The manifest is at the
+# repository root, so these are too. `build/` is already ignored above by the
+# Python section, which is where Scripts/bundle.sh puts Enka.app — named here
+# too so the reason is written down next to the rest.
+.build/
+.swiftpm/
 macos/build/
-macos/Package.resolved
+ios/build/
+Package.resolved
 macos/*.xcodeproj/
 macos/*.xcworkspace/
+
+# ios/Enka.xcodeproj is committed, unlike the ones above: an iOS .app cannot be
+# built without it, and Xcode 16's synchronised folder groups mean adding a
+# source file no longer edits project.pbxproj. Only the per-user state inside
+# it is ignored, by the xcuserdata rule below.
 
 # Xcode, for anyone who opens the package in it rather than building from the
 # command line. Xcode writes per-user state into the package directory.
