@@ -111,6 +111,22 @@ The scheduling, the `elapsed_ms`, the undo and the "next in 8 days" that
 follows an answer are all `StudySession`, unchanged from the Mac. The menu in
 the corner switches mode and direction and signs out.
 
+Along the top, beside the due count: the streak, and how many cards have been
+answered today. The flame is grey until the day's first answer lands and then
+turns clay — that moment is the whole feedback loop of a streak, and it costs
+one colour.
+
+Both are seeded from `/stats` once per appearance and then moved by
+`StudySession.recordedAnswers`, which counts one up per answer and one down per
+undo. Refetching a dozen queries and a leech list to learn that a number went
+up by one would be absurd, and the only part of that payload which moves while
+somebody is studying moves by exactly one at a time.
+
+`/stats` now takes a `tz`, and the Apple clients send their own. A day counted
+in UTC puts a session studied at one in the morning on the day before, so the
+tally would reset three hours into the night — defensible for a chart, wrong
+for a streak. The server still defaults to UTC for anything that does not ask.
+
 ## Where this is going
 
 Rating works; making it *pleasant* is next. A card should be draggable — left

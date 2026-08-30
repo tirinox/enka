@@ -142,6 +142,20 @@ token: ## Print a fresh JWT (use: TOKEN=$$(make -s token))
 secret: ## Print the access secret to type into a client
 	@echo "$(call env_get,ENKA_ACCESS_SECRET)"
 
+.PHONY: lan
+lan: ## Print the Bonjour URL a phone on the same Wi-Fi can connect to
+	@# LocalHostName is the name this Mac advertises over mDNS, so every Apple
+	@# device on the network resolves <name>.local with no DNS server involved.
+	@# The numeric address comes along for anything that does not speak Bonjour.
+	@port=$(or $(API_PORT),8000); \
+	 host=$$(scutil --get LocalHostName 2>/dev/null || hostname -s); \
+	 url="http://$$host.local:$$port"; \
+	 echo "$$url"; \
+	 ip=$$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null); \
+	 [ -n "$$ip" ] && echo "http://$$ip:$$port  (if .local does not resolve)"; \
+	 curl -fsS -m 2 -o /dev/null "$$url/health" \
+	   || echo "Not answering there yet — is 'make up' running?"
+
 .PHONY: seed
 seed: ## Load a handful of demo cards
 	$(DC) exec -T api python -m app.seed

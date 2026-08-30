@@ -76,6 +76,10 @@ same Swift underneath: `shared/` holds the API client, the session and the
 study logic, and both Apple clients compile it from one copy. See
 [`ios/README.md`](ios/README.md).
 
+On a real phone, `localhost` is the phone. `make lan` prints the Bonjour URL of
+this Mac — `http://<name>.local:8010` — which is what to type as the server
+address while both are on the same Wi-Fi.
+
 ## How auth works
 
 There are no accounts. The server holds one secret (`ENKA_ACCESS_SECRET` in

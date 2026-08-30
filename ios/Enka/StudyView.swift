@@ -21,6 +21,11 @@ struct StudyView: View {
     @State private var drag: CGSize = .zero
     @State private var pending: Rating?
 
+    /// The streak and today's count as the server last reported them, plus the
+    /// answer tally at that moment. Everything answered since is added on top,
+    /// rather than asked for again.
+    @State private var day: DaySeed?
+
     var body: some View {
         VStack(spacing: 0) {
             topBar
@@ -31,11 +36,16 @@ struct StudyView: View {
         .background(Theme.bg)
         .tint(Theme.accent)
         .onAppear { study.setActive(true) }
+        .task { await loadDay() }
         // Backgrounding the app is the phone's version of folding the panel:
         // audio stops and nothing is left in flight. The card survives it —
         // `setActive(true)` only fetches when there is nothing up — so
         // glancing at a notification does not cost the card being answered.
-        .onChange(of: scenePhase) { _, phase in study.setActive(phase == .active) }
+        .onChange(of: scenePhase) { _, phase in
+            study.setActive(phase == .active)
+            // A phone put down overnight comes back on a different day.
+            if phase == .active { Task { await loadDay() } }
+        }
         .animation(Theme.fast, value: pending)
     }
 
@@ -48,6 +58,8 @@ struct StudyView: View {
                 .foregroundStyle(Theme.textMuted)
                 .contentTransition(.numericText())
                 .animation(Theme.normal, value: study.remainingDue)
+
+            tallies
 
             Spacer()
 
@@ -68,6 +80,47 @@ struct StudyView: View {
         .padding(.horizontal, 16)
         .frame(height: 44)
         .animation(Theme.fast, value: study.undoableCard)
+    }
+
+    /// The streak and the day's tally, quiet next to the due count.
+    ///
+    /// The flame is grey until the day's first answer lands and then turns
+    /// clay. That is the whole feedback loop of a streak — the moment it is
+    /// safe for another day — and it costs one colour.
+    @ViewBuilder private var tallies: some View {
+        if let day {
+            let today = max(0, day.reviews + study.recordedAnswers - day.baseline)
+            // The server's streak already counts today if it had seen an
+            // answer; the first one of the day is what extends the run.
+            let streak = day.streak + (day.reviews == 0 && today > 0 ? 1 : 0)
+
+            HStack(spacing: 12) {
+                if streak > 0 {
+                    Label("\(streak)", systemImage: "flame.fill")
+                        .foregroundStyle(today > 0 ? Theme.accent : Theme.textFaint)
+                        .accessibilityLabel("\(streak) day streak")
+                }
+                Label("\(today)", systemImage: "checkmark")
+                    .foregroundStyle(Theme.textFaint)
+                    .accessibilityLabel("\(today) answered today")
+            }
+            .font(.footnote.weight(.medium))
+            .monospacedDigit()
+            .contentTransition(.numericText())
+            .animation(Theme.normal, value: today)
+        }
+    }
+
+    /// Seeded once per appearance rather than refetched per card: `/stats` is a
+    /// dozen queries and a leech list, and the only part of it that moves while
+    /// somebody studies moves by exactly one each time.
+    private func loadDay() async {
+        // Taken before the request, so an answer that lands mid-flight is
+        // counted once — by the delta if the server missed it, and the seed is
+        // replaced wholesale if it did not.
+        let baseline = study.recordedAnswers
+        guard let stats = try? await session.run({ try await $0.stats() }) else { return }
+        day = DaySeed(reviews: stats.reviewsToday, streak: stats.currentStreakDays, baseline: baseline)
     }
 
     private var menu: some View {
@@ -327,6 +380,15 @@ struct StudyView: View {
 }
 
 // MARK: - Pieces
+
+/// What `/stats` said, and when — "when" being the answer tally at the moment
+/// it was asked, which is what makes the delta since meaningful.
+private struct DaySeed {
+    let reviews: Int
+    let streak: Int
+    let baseline: Int
+}
+
 
 /// The card itself: prompt above, answer below once it has been earned.
 ///
