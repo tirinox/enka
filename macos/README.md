@@ -109,6 +109,32 @@ box empty: the secret already held is reused.
 panel when there is nothing to back out of. The menu bar item opens any tab
 directly.
 
+### Why study stays open, and why not straight away
+
+Study is the one tab the pointer does not close. A card is read with the mouse
+wherever it last landed — not kept hovering the panel — so folding on the
+pointer there is folding on nothing. That tab carries a ✕ instead.
+
+But study is also the tab the panel *opens* on, and a panel that unfolds on
+hover unfolds by accident. Pinned from the first frame, one stray pass across
+the notch left a card sitting over the top of the screen until somebody found
+the ✕ — a poor trade for a gesture nobody made.
+
+So the pin is earned rather than granted on arrival. Until it is, study behaves
+like every other tab and the pointer closes it. Two things earn it, and both
+mean the same thing — somebody is actually here:
+
+- **fifteen seconds** with the panel open, which is far longer than any pointer
+  crossing the notch and no time at all for a card being read;
+- **any press that moves the session along** — reveal, a rating, undo, try
+  again, a change of mode or direction.
+
+Opening the panel from the menu bar earns it outright: that gesture happens with
+the pointer up in the menu bar, where a hover rule has nothing to read.
+
+The pin is dropped when the panel closes, and when you leave the tab, so the
+next hover starts where the last one did.
+
 ### Why study needs one click first
 
 Every other tab takes the keyboard the moment you land on it. Study does not:
@@ -122,8 +148,9 @@ Greek layout half the time, and `U` for undo prints something else there.
 
 ## What it does not do
 
-Deliberately. The panel opens on a hover and closes when the pointer leaves, so
-nothing that needs more than a few seconds of attention belongs in it:
+Deliberately. The panel opens on a hover and — study once it is in use aside —
+closes when the pointer leaves, so nothing that needs more than a few seconds of
+attention belongs in it:
 
 - **No card editing.** A card is created here and edited in the web client,
   where there is room to think. Suspending is the one change search will make,

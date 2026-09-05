@@ -21,6 +21,10 @@ final class NotchController {
     private var viewModel: NotchViewModel?
     private let pointer = PointerWatcher()
     private var closeActiveRectWork: DispatchWorkItem?
+    /// Counts out the fifteen seconds that earn the study pin. Cancelled by
+    /// anything that answers the question sooner — a press, another tab, the
+    /// panel closing.
+    private var studyPinWork: DispatchWorkItem?
     /// The deferred check `scheduleCollapseIfPointerAway` runs. Stored so a
     /// newer one can cancel an older one still in flight — losing and
     /// regaining the keyboard in quick succession (a tab switch, a refocused
@@ -113,6 +117,11 @@ final class NotchController {
         guard let viewModel else { return }
         setOpen(!viewModel.isOpen)
         pointer.setInside(viewModel.isOpen)
+        // Same reasoning as `open(_:)`: whatever calls this does it with the
+        // pointer wherever the user's hand left it, which is not a hover and
+        // cannot be read as one. Unpinned, the watcher would fold the panel
+        // back up within the second of it being asked for.
+        if viewModel.isOpen { viewModel.studyEngaged() }
     }
 
     /// Opens the panel straight onto one tab. What the status menu's shortcuts
@@ -122,6 +131,12 @@ final class NotchController {
         viewModel.select(tab)
         setOpen(true)
         pointer.setInside(true)
+        // Earned outright, not after fifteen seconds. This gesture happens
+        // entirely in the menu bar, with the pointer nowhere near the panel it
+        // just opened — the hover rules have nothing to read here, and left to
+        // them they would fold the panel back up within the second. Choosing
+        // the tab by name is as deliberate as pressing a button in it.
+        viewModel.studyEngaged()
     }
 
     // MARK: - Construction
@@ -132,6 +147,7 @@ final class NotchController {
         viewModel?.stop()
         closeActiveRectWork?.cancel()
         pointerAwayWork?.cancel()
+        studyPinWork?.cancel()
         cancellables.removeAll()
         panel?.releaseKeyboard()
         panel?.orderOut(nil)
@@ -202,9 +218,11 @@ final class NotchController {
         pointer.openDelay = geometry.isPhysical ? 0.05 : 0.3
         pointer.isPanelOpen = { [weak vm] in vm?.isOpen ?? false }
         // A card is read with the mouse wherever it happened to land, not kept
-        // hovering the panel — closing on the pointer here is closing on
-        // nothing. Study mode is closed by its own button instead.
-        pointer.pinned = { [weak vm] in vm?.tab == .study }
+        // hovering the panel — closing on the pointer there is closing on
+        // nothing. But only once the tab has earned it: study is the tab the
+        // panel opens on, and a panel that unfolds on hover unfolds by
+        // accident. See `NotchViewModel.studyIsPinned`.
+        pointer.pinned = { [weak vm] in vm?.studyHoldsOpen ?? false }
         pointer.onChange = { [weak self] inside in
             self?.setOpen(inside)
         }
@@ -226,7 +244,12 @@ final class NotchController {
                     guard let self, let vm = self.viewModel, vm.isOpen else { return }
                     // A pass later: `openBodySize` reads `tab`, and this fires
                     // while the property is still being set.
-                    DispatchQueue.main.async { self.refreshOpenRects() }
+                    DispatchQueue.main.async {
+                        self.refreshOpenRects()
+                        // Arriving at study starts the clock; leaving it stops
+                        // one already running.
+                        self.refreshStudyPinTimer()
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -358,6 +381,34 @@ final class NotchController {
         return true
     }
 
+    // MARK: - Earning the study pin
+
+    /// How long the panel must stand open on the study tab before it stops
+    /// obeying the pointer.
+    ///
+    /// Fifteen seconds is far longer than any pointer thrown at the top of the
+    /// screen, and no time at all for somebody reading a card: by then they
+    /// have either answered it — which earns the pin outright — or they are
+    /// still looking at it, which is the case the pin exists for.
+    private static let studyPinDelay: TimeInterval = 15
+
+    /// Starts, restarts or cancels the clock to match what is on screen.
+    ///
+    /// Called from everywhere the answer could have changed rather than from
+    /// one clever place: opening, closing, and switching tabs are three
+    /// unrelated events that happen to decide the same thing.
+    private func refreshStudyPinTimer() {
+        studyPinWork?.cancel()
+        studyPinWork = nil
+        guard let vm = viewModel, vm.isOpen, vm.tab == .study, !vm.studyIsPinned else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let vm = self?.viewModel, vm.isOpen, vm.tab == .study else { return }
+            vm.studyEngaged()
+        }
+        studyPinWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.studyPinDelay, execute: work)
+    }
+
     // MARK: - Open / close
 
     /// The deliberate way to close, independent of the pointer: Escape, and
@@ -406,6 +457,7 @@ final class NotchController {
             applyActiveRect(open: true)
             withAnimation(Theme.openAnimation) { vm.isOpen = true }
             vm.study.setActive(vm.tab == .study)
+            refreshStudyPinTimer()
             if vm.tab == .stats { vm.stats.refresh() }
         } else {
             // The keyboard goes first and the fold goes second — one run-loop
@@ -428,6 +480,13 @@ final class NotchController {
         guard let vm = viewModel, vm.isOpen else { return }
         withAnimation(Theme.openAnimation) { vm.isOpen = false }
         vm.study.setActive(false)
+        // A pin belongs to the sitting that earned it. Dropped here rather than
+        // on the way back in, so every path that closes the panel — the ✕,
+        // Escape, the pointer, the screen going to sleep — leaves the next
+        // hover to start where this one did.
+        vm.releaseStudyPin()
+        studyPinWork?.cancel()
+        studyPinWork = nil
         audio.stop()
         // Shrink only once the panel has finished collapsing. Doing it while it
         // is still visibly there would leave a window in which clicks land on
@@ -447,13 +506,14 @@ final class NotchController {
         pointerAwayWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self, let vm = self.viewModel else { return }
-            // Study is pinned open: this check is exactly the pointer-based
-            // close `PointerWatcher.pinned` turns off there, just reached by
-            // losing the keyboard instead of by hovering away — arriving at
-            // Study from a typing tab drops the keyboard the same way leaving
-            // the app does. Skip it rather than let it sneak the same close
-            // back in by a side door.
-            guard vm.tab != .study else { return }
+            // A pinned study tab is exempt: this check is exactly the
+            // pointer-based close `PointerWatcher.pinned` turns off there, just
+            // reached by losing the keyboard instead of by hovering away —
+            // arriving at Study from a typing tab drops the keyboard the same
+            // way leaving the app does. Skip it rather than let it sneak the
+            // same close back in by a side door. Unpinned, study gets no such
+            // exemption: not having earned the pin is the whole point.
+            guard !vm.studyHoldsOpen else { return }
             // Resync either way. A pointer that is still on the panel has to be
             // recorded as inside, or hover tracking stays convinced it left and
             // the panel hangs open until the notch is touched again.

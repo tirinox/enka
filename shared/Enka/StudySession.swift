@@ -45,6 +45,7 @@ final class StudySession: ObservableObject {
     @Published var mode: StudyMode = Preferences.studyMode {
         didSet {
             guard mode != oldValue else { return }
+            onUserAction?()
             Preferences.studyMode = mode
             restart(force: true)
         }
@@ -53,6 +54,7 @@ final class StudySession: ObservableObject {
     @Published var direction: StudyDirection = Preferences.studyDirection {
         didSet {
             guard direction != oldValue else { return }
+            onUserAction?()
             Preferences.studyDirection = direction
             // The card on screen keeps the direction it was asked in: swapping
             // sides under someone mid-answer would be a different question with
@@ -73,6 +75,16 @@ final class StudySession: ObservableObject {
     /// can act on. Cleared once undone, so a second press cannot walk backwards
     /// through a history the panel does not keep.
     @Published private(set) var undoableCard: Card?
+
+    /// Raised by anything the user does to move the session along — revealing,
+    /// rating, undoing, retrying, changing the mode or the direction.
+    ///
+    /// It exists for the Mac panel, which unfolds on hover and therefore
+    /// unfolds by accident, and which needs to tell "somebody is studying" from
+    /// "the pointer crossed the notch". Loading a card is not on the list: the
+    /// session does that by itself, and an arrival nobody asked for is exactly
+    /// the case being detected. Left nil everywhere else.
+    var onUserAction: (() -> Void)?
 
     private let session: Session
     private let audio: AudioPlayback
@@ -160,17 +172,25 @@ final class StudySession: ObservableObject {
 
     /// What the "try again" button presses. The pane has no business knowing
     /// whether a reload cancels anything.
-    func reload() { restart(force: true) }
+    func reload() {
+        onUserAction?()
+        restart(force: true)
+    }
 
     /// Space, or a click anywhere on the card. Idempotent, because both of
     /// those can arrive twice for one intention.
     func reveal() {
+        // Before the guard, not after. Revealing an already-revealed card does
+        // nothing to the session, but somebody still pressed the key, and that
+        // is the whole of what `onUserAction` reports.
+        onUserAction?()
         guard case let .card(study, revealed) = phase, !revealed else { return }
         phase = .card(study, revealed: true)
         autoPlay(for: study, revealed: true)
     }
 
     func answer(_ rating: Rating) {
+        onUserAction?()
         guard case let .card(study, revealed) = phase else { return }
         // Rating a card whose answer has not been seen is answering a question
         // that was not asked. The key still does something — it reveals — so
@@ -215,6 +235,7 @@ final class StudySession: ObservableObject {
     /// undo is pressed because the rating was wrong, not because the card was
     /// unfinished.
     func undo() {
+        onUserAction?()
         guard let card = undoableCard else { return }
         work?.cancel()
         phase = .loading

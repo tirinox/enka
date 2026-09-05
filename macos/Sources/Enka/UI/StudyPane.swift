@@ -82,8 +82,9 @@ struct StudyPane: View {
             }
 
             // A card is read with the mouse wherever it landed, not kept
-            // hovering the panel, so hovering away does not close this tab —
-            // see `PointerWatcher.pinned`. This is the way back that gives.
+            // hovering the panel, so once this tab has been used for a few
+            // seconds hovering away stops closing it — see
+            // `NotchViewModel.studyIsPinned`. This is the way back that gives.
             Button {
                 vm.requestClose()
             } label: {

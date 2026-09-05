@@ -70,8 +70,39 @@ final class NotchViewModel: ObservableObject {
             }
             // Leaving a tab that types gives the keyboard straight back.
             if !tab.needsKeyboard { wantsKeyboard = false }
+            // The pin belongs to a sitting at the study tab, not to the panel.
+            // Walking off to the stats and back is a fresh arrival, and it is
+            // judged like one.
+            if oldValue == .study { releaseStudyPin() }
         }
     }
+
+    /// Whether the study tab has earned the right to stay open with no pointer
+    /// on it.
+    ///
+    /// Study is the default tab, and the panel unfolds on hover — so the panel
+    /// standing open on a card is, as often as not, something the pointer did
+    /// on its way somewhere else. Pinning that open put a card over the top of
+    /// the screen until somebody found the ✕, which is a poor trade for a
+    /// gesture nobody made on purpose.
+    ///
+    /// So the pin is earned rather than granted on arrival. Until it is, study
+    /// behaves like every other tab and the pointer closes it. Two things earn
+    /// it, and both mean the same thing — somebody is actually here:
+    ///
+    /// - a quarter of a minute with the panel open, which is far longer than
+    ///   any pointer crossing the notch, and no time at all for a card being
+    ///   read;
+    /// - any press that moves the session along, via `StudySession.onUserAction`.
+    ///
+    /// It is dropped when the panel closes, so the next accidental hover starts
+    /// from the same place this one did.
+    @Published private(set) var studyIsPinned = false
+
+    /// Whether the panel must stay open with no pointer on it. The one
+    /// exception to "the pointer decides", and the reason the study tab carries
+    /// a close button.
+    var studyHoldsOpen: Bool { tab == .study && studyIsPinned }
 
     /// Whether the panel currently holds the keyboard.
     ///
@@ -80,9 +111,24 @@ final class NotchViewModel: ObservableObject {
     /// showing, so a half-typed card survives and the panel is free to collapse.
     @Published var wantsKeyboard = false
 
-    /// Set by the controller, called by the study tab's close button. The
-    /// pointer is pinned open there, so this is the one way back besides
-    /// Escape.
+    /// Somebody is studying, not passing through — from here on the pointer
+    /// stops deciding. Raised by `StudySession.onUserAction`, and by the status
+    /// menu, whose whole gesture happens with the pointer up in the menu bar
+    /// where no hover rule could ever apply.
+    func studyEngaged() {
+        guard tab == .study else { return }
+        studyIsPinned = true
+    }
+
+    /// Dropped when the panel closes, so a pin earned in one sitting is not
+    /// still in force for the hover that opens the next one.
+    func releaseStudyPin() {
+        studyIsPinned = false
+    }
+
+    /// Set by the controller, called by the study tab's close button. Once the
+    /// pin is earned the pointer no longer closes the panel, so this is the one
+    /// way back besides Escape.
     var requestClose: () -> Void = {}
 
     let geometry: NotchGeometry
@@ -124,6 +170,13 @@ final class NotchViewModel: ObservableObject {
         tagStore.$tags
             .sink { [weak self] tags in self?.capture.reconcile(with: tags) }
             .store(in: &cancellables)
+
+        // Every press in the study loop arrives here, wherever in the pane it
+        // was made. Wired once at the source rather than at each call site: a
+        // rating button added later would otherwise be one somebody forgot to
+        // report, and the failure is silent — the panel simply closes under a
+        // card being answered.
+        study.onUserAction = { [weak self] in self?.studyEngaged() }
 
         for child in [session.objectWillChange, study.objectWillChange, stats.objectWillChange, tagStore.objectWillChange] {
             child
