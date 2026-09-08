@@ -113,11 +113,65 @@ final class StudySession: ObservableObject {
         guard active != isActive else { return }
         isActive = active
         if active {
-            if case .card = phase {} else { restart() }
+            if case .card = phase {
+                // The card survived being away and so did the count beside it,
+                // which is the half that goes stale: the collection may have
+                // been worked through from another client in the meantime.
+                Task { await refreshRemainingDue() }
+            } else {
+                restart()
+            }
+            startDuePolling()
         } else {
+            duePoll?.cancel()
+            duePoll = nil
             work?.cancel()
             audio.stop()
         }
+    }
+
+    // MARK: - The due count
+
+    /// How often an open study screen re-asks how much is due.
+    ///
+    /// The count is otherwise written only when this session fetches or answers
+    /// something — right while somebody is studying here, wrong the moment they
+    /// study anywhere else. Two clients over one collection is the normal case
+    /// now rather than a curiosity, and a phone left open beside a Mac being
+    /// worked through was showing a number hours old.
+    ///
+    /// A minute rather than the menu bar's five: this number is being looked
+    /// at rather than glanced at, and what moves it fastest is not cards coming
+    /// due but the same collection being answered somewhere else.
+    private let duePollInterval: Duration = .seconds(60)
+    private var duePoll: Task<Void, Never>?
+
+    private func startDuePolling() {
+        duePoll?.cancel()
+        let interval = duePollInterval
+        duePoll = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled, let self else { return }
+                await self.refreshRemainingDue()
+            }
+        }
+    }
+
+    /// Re-asks how much is due, without disturbing the card on screen.
+    ///
+    /// Only while one is up. `/study/queue` marks nothing as shown, so the call
+    /// itself is free, but a fetch or an answer already has a request in flight
+    /// that reports the count itself, and the two racing would leave whichever
+    /// landed last. The phase is checked again afterwards for the same reason.
+    ///
+    /// Failures are dropped. A poll that cannot reach the server has nothing to
+    /// say that the next card's fetch will not say louder.
+    func refreshRemainingDue() async {
+        guard case .card = phase else { return }
+        guard let count = try? await session.run({ try await $0.remainingDue() }) else { return }
+        guard case .card = phase else { return }
+        remainingDue = count
     }
 
     var currentCard: StudyCard? {

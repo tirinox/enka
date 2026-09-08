@@ -20,11 +20,15 @@ final class StatsStore: ObservableObject {
     private var timer: Timer?
     private var work: Task<Void, Never>?
 
-    /// Five minutes. The scheduler's shortest interval is about a minute, so a
-    /// faster poll would mostly re-learn the same number; slower, and a card
-    /// that came due while you were reading would not show up until you had
-    /// stopped caring.
-    private let pollInterval: TimeInterval = 300
+    /// A minute.
+    ///
+    /// It was five, on the reasoning that the scheduler's shortest interval is
+    /// about a minute so a faster poll would mostly re-learn the same number.
+    /// That was right about cards coming due and wrong about everything else:
+    /// what actually moves this number is the collection being answered from
+    /// another client, and at five minutes the badge and the phone could
+    /// disagree by a whole study session.
+    private let pollInterval: TimeInterval = 60
 
     init(session: Session) {
         self.session = session
@@ -36,10 +40,10 @@ final class StatsStore: ObservableObject {
         let timer = Timer(timeInterval: pollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refreshDue() }
         }
-        // A minute of slack on a five-minute beat: the system can fold this
-        // wake-up into one it was making anyway, and nothing here is worse for
-        // arriving late.
-        timer.tolerance = 60
+        // A quarter of the beat as slack: the system can fold this wake-up
+        // into one it was making anyway, and nothing here is worse for arriving
+        // a little late.
+        timer.tolerance = 15
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
