@@ -13,6 +13,7 @@ struct SettingsView: View {
 
     @State private var secret = ""
     @State private var autoPlay = Preferences.autoPlayAudio
+    @State private var fillFromClipboard = Preferences.fillFromClipboard
     @State private var nativeLanguage = ""
     @State private var nativeLanguageProblem: String?
     @State private var isSigningOut = false
@@ -25,6 +26,7 @@ struct SettingsView: View {
             Form {
                 serverSection
                 studySection
+                addingSection
                 aiSection
                 tagsSection
                 accountSection
@@ -165,6 +167,32 @@ struct SettingsView: View {
             Text("Study")
         } footer: {
             Text(study.mode.blurb)
+        }
+        .listRowBackground(Theme.surface)
+    }
+
+    // MARK: - Adding
+
+    /// The one setting that exists because iOS asks a question. Reading the
+    /// clipboard from code raises "Allow Paste?", and somebody who does not
+    /// want that question does not want it every time they copy something —
+    /// so it is a switch, and the paste button on the field stays either way.
+    private var addingSection: some View {
+        Section {
+            Toggle(isOn: $fillFromClipboard) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fill from the clipboard")
+                    Text("Opening Add with an empty field asks iOS for the last thing you copied.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textFaint)
+                }
+            }
+            .tint(Theme.accent)
+            .onChange(of: fillFromClipboard) { _, value in Preferences.fillFromClipboard = value }
+        } header: {
+            Text("Adding")
+        } footer: {
+            Text("Asked once per copied item, and never over a word already in the field. The paste button beside the field works whether this is on or off.")
         }
         .listRowBackground(Theme.surface)
     }

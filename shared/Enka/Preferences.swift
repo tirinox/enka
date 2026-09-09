@@ -13,6 +13,7 @@ enum Preferences {
         static let studyMode = "studyMode"
         static let studyDirection = "studyDirection"
         static let autoPlayAudio = "autoPlayAudio"
+        static let fillFromClipboard = "fillFromClipboard"
         static let badgeShowsDue = "badgeShowsDue"
         static let tokenExpiry = "tokenExpiresAt"
     }
@@ -56,6 +57,20 @@ enum Preferences {
     static var autoPlayAudio: Bool {
         get { defaults.object(forKey: Key.autoPlayAudio) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.autoPlayAudio) }
+    }
+
+    /// Whether the Add screen may ask the system for what was last copied and
+    /// put it in the empty field.
+    ///
+    /// Defaults to on, because the word is on the clipboard already in the case
+    /// this app exists for — you were reading something and selected a word —
+    /// and a field that fills itself is the whole gesture saved. It is a switch
+    /// rather than a fact because iOS asks before handing anything over, and
+    /// somebody who does not want that question does not want it every time
+    /// they copy something.
+    static var fillFromClipboard: Bool {
+        get { defaults.object(forKey: Key.fillFromClipboard) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.fillFromClipboard) }
     }
 
     /// When the token in the keychain runs out.
