@@ -63,6 +63,17 @@ enum Theme {
         }
     }
 
+    /// The activity ramp, coolest to warmest — the web client's, so a good week
+    /// looks the same in every client. The first rung is a day with nothing in
+    /// it, which has to read as an empty slot rather than as a small amount.
+    static let heat: [Color] = [
+        c(0xE7E3DA, 0x232120),
+        c(0xE0C7B4, 0x4A3A30),
+        c(0xD3A184, 0x7A5240),
+        c(0xC97C54, 0xB06A4C),
+        c(0xC25F3D, 0xE08A6D),
+    ]
+
     // MARK: - Shape and time
 
     static let radiusSmall: CGFloat = 6
@@ -92,6 +103,32 @@ enum Theme {
                 ? UIColor(hex: dark, alpha: darkAlpha)
                 : UIColor(hex: light, alpha: lightAlpha)
         })
+    }
+}
+
+extension Color {
+    /// `#RRGGBB`, which is the only shape the tag endpoint stores. Returns nil
+    /// on anything else, so a tag with a colour typed by hand in the web client
+    /// falls back to looking like the tags that have none.
+    init?(hex: String) {
+        var text = hex.trimmingCharacters(in: .whitespaces)
+        if text.hasPrefix("#") { text.removeFirst() }
+        guard text.count == 6, let value = UInt32(text, radix: 16) else { return nil }
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255
+        )
+    }
+}
+
+extension Date {
+    /// "in 3 days", "2 hours ago" — the system's own phrasing, so it follows
+    /// the user's language without a table of words to translate.
+    var relative: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: self, relativeTo: Date())
     }
 }
 

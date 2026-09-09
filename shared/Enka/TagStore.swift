@@ -40,20 +40,30 @@ final class TagStore: ObservableObject {
     /// nothing most days.
     func refresh() {
         work?.cancel()
+        work = Task { await load() }
+    }
+
+    /// The same fetch, awaited — what a pull-to-refresh gesture holds its
+    /// spinner open for. `refresh` cannot be it: a gesture that returns the
+    /// moment a task is spawned snaps shut before the list under it changes.
+    func reload() async {
+        work?.cancel()
+        await load()
+    }
+
+    private func load() async {
         isLoading = tags.isEmpty
-        work = Task {
-            do {
-                let fetched = try await session.run { try await $0.tags() }
-                guard !Task.isCancelled else { return }
-                tags = fetched
-                notice = nil
-            } catch is CancellationError {
-                return
-            } catch {
-                announce(error)
-            }
-            isLoading = false
+        do {
+            let fetched = try await session.run { try await $0.tags() }
+            guard !Task.isCancelled else { return }
+            tags = fetched
+            notice = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            announce(error)
         }
+        isLoading = false
     }
 
     /// Most-used first, which is the order the add tab wants for its chips and

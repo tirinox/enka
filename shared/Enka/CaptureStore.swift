@@ -23,6 +23,10 @@ final class CaptureStore: ObservableObject {
     @Published private(set) var notice: String?
     /// The card just saved, held only long enough to show a line confirming it.
     @Published private(set) var justSaved: String?
+    /// The same card, whole, for whoever is showing a list it now belongs in.
+    /// Kept until the next save rather than cleared with the confirmation: a
+    /// list that has not been looked at yet still wants it.
+    @Published private(set) var lastCreated: Card?
 
     // MARK: - AI definition
     //
@@ -97,6 +101,7 @@ final class CaptureStore: ObservableObject {
                 askingNativeLanguage = false
                 nativeLanguageDraft = ""
                 justSaved = created.term
+                lastCreated = created
                 announce(nil)
                 Task {
                     try? await Task.sleep(for: .seconds(2.4))

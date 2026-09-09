@@ -13,7 +13,15 @@ import UIKit
 struct StudyView: View {
     @EnvironmentObject private var session: Session
     @EnvironmentObject private var study: StudySession
+    @EnvironmentObject private var audio: AudioPlayback
+    @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var tagStore: TagStore
     @Environment(\.scenePhase) private var scenePhase
+
+    /// The card being edited, which is always the one on screen. Filling in a
+    /// meaning at the moment of failing to remember it is the most useful edit
+    /// in the app, and it has to be reachable from here or it does not happen.
+    @State private var editing: Card?
 
     /// How far the card has been dragged, and which rating a release would
     /// therefore record. `pending` is derived from `drag`, but kept separately
@@ -36,6 +44,10 @@ struct StudyView: View {
         .background(Theme.bg)
         .tint(Theme.accent)
         .onAppear { study.setActive(true) }
+        // Leaving the tab is the phone's version of folding the panel: nothing
+        // is left in flight and no card is fetched for a screen nobody is
+        // looking at — `study/next` counts a fetch as having shown it.
+        .onDisappear { study.setActive(false) }
         .task { await loadDay() }
         // Backgrounding the app is the phone's version of folding the panel:
         // audio stops and nothing is left in flight. The card survives it —
@@ -47,6 +59,21 @@ struct StudyView: View {
             if phase == .active { Task { await loadDay() } }
         }
         .animation(Theme.fast, value: pending)
+        .sheet(item: $editing) { card in
+            CardEditorView(session: session, card: card, tags: tagStore, audio: audio) { outcome in
+                switch outcome {
+                case let .saved(saved):
+                    study.replaceCurrent(with: saved)
+                    library.apply(saved)
+                    // A card put out of rotation is a card this screen has no
+                    // business still asking. So is one that has just gone.
+                    if saved.suspended { study.reload() }
+                case let .deleted(id):
+                    library.remove(id: id)
+                    study.reload()
+                }
+            }
+        }
     }
 
     // MARK: - Top
@@ -125,14 +152,32 @@ struct StudyView: View {
 
     private var menu: some View {
         Menu {
+            if let card = study.currentCard?.card {
+                Button {
+                    editing = card
+                } label: {
+                    Label("Edit this card", systemImage: "square.and.pencil")
+                }
+                Button {
+                    suspendCurrent(card)
+                } label: {
+                    Label("Pause this card", systemImage: "pause.circle")
+                }
+                if !card.clips(for: .term).isEmpty || !card.clips(for: .definition).isEmpty {
+                    Button {
+                        audio.playAll(card.clips(for: .term) + card.clips(for: .definition), using: session)
+                    } label: {
+                        Label("Play audio", systemImage: "speaker.wave.2")
+                    }
+                }
+                Divider()
+            }
             Picker("Mode", selection: $study.mode) {
                 ForEach(StudyMode.allCases) { Text($0.title).tag($0) }
             }
             Picker("Asked", selection: $study.direction) {
                 ForEach(StudyDirection.allCases) { Text($0.title).tag($0) }
             }
-            Divider()
-            Button("Sign out", role: .destructive) { session.signOut() }
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.body.weight(.medium))
@@ -331,6 +376,19 @@ struct StudyView: View {
         guard !study.isRevealed else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         study.reveal()
+    }
+
+    /// Takes the card out of rotation and moves on. A word that keeps coming
+    /// back on a commute is usually one that needs rewriting rather than
+    /// another answer, and this is the two-tap way of deciding that later
+    /// without breaking the run.
+    private func suspendCurrent(_ card: Card) {
+        Task {
+            guard let updated = try? await session.run({ try await $0.update(cardID: card.id, suspended: true) })
+            else { return }
+            library.apply(updated)
+            study.reload()
+        }
     }
 
     /// The two that carry a verdict get the system's verdict haptics; the two

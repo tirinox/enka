@@ -143,6 +143,57 @@ struct CardCreate: Encodable {
     var definition: String?
     var notes: String?
     var tags: [String]?
+    var starRating: Int?
+    var suspended: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case term, definition, notes, tags, suspended
+        case starRating = "star_rating"
+    }
+}
+
+/// A PATCH body for one card: what changed, and nothing else.
+///
+/// `PATCH /cards/{id}` reads its payload with `exclude_unset`, so a field left
+/// out is a field left alone — which is what makes an editor that touched one
+/// line safe to send while another client is editing another. It also means
+/// *clearing* a definition is sending `"definition": null` rather than sending
+/// nothing, and Swift's `JSONEncoder` drops nil optionals by default. So the
+/// two intentions are held apart by a double optional, exactly as `updateTag`
+/// holds them apart for a tag's colour: `nil` leaves the field alone,
+/// `.some(nil)` clears it.
+struct CardPatch: Encodable {
+    var term: String?
+    var definition: String??
+    var notes: String??
+    var starRating: Int??
+    var suspended: Bool?
+    /// Replaces the whole set when sent — the endpoint says so, and the editor
+    /// therefore always sends every tag the card should end up with.
+    var tags: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case term, definition, notes, suspended, tags
+        case starRating = "star_rating"
+    }
+
+    /// Nothing to say. A save with an empty patch is a round trip that would
+    /// answer with the card it was already showing.
+    var isEmpty: Bool {
+        term == nil && definition == nil && notes == nil
+            && starRating == nil && suspended == nil && tags == nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(term, forKey: .term)
+        // Present-but-nil encodes as JSON null; absent stays absent.
+        if let definition { try container.encode(definition, forKey: .definition) }
+        if let notes { try container.encode(notes, forKey: .notes) }
+        if let starRating { try container.encode(starRating, forKey: .starRating) }
+        try container.encodeIfPresent(suspended, forKey: .suspended)
+        try container.encodeIfPresent(tags, forKey: .tags)
+    }
 }
 
 struct Page<T: Decodable>: Decodable {

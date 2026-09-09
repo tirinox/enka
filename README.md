@@ -72,9 +72,15 @@ make ios-run
 ```
 
 Builds for the simulator and launches it. The same secret signs it in, and the
-same Swift underneath: `shared/` holds the API client, the session and the
-study logic, and both Apple clients compile it from one copy. See
-[`ios/README.md`](ios/README.md).
+same Swift underneath: `shared/` holds the API client, the session, the study
+logic and the stores behind every screen, and both Apple clients compile it
+from one copy.
+
+Five tabs — study, add, cards, progress, settings — so the whole collection is
+reachable from the phone: a card can be written, found, edited, tagged, paused
+or deleted, and a delete can be taken back. The Mac panel stops short of that
+on purpose; it is four seconds under the notch, and a phone is where a
+collection actually gets tidied. See [`ios/README.md`](ios/README.md).
 
 On a real phone, `localhost` is the phone. `make lan` prints a sign-in URL for
 this Mac — `http://<name>.local:8010#<secret>` — to send to yourself and paste

@@ -58,7 +58,32 @@ final class AudioPlayback: NSObject, ObservableObject {
         play(first, using: session)
     }
 
+    /// iOS starts every app in a category that obeys the ring/silent switch, so
+    /// a clip of somebody saying a word would be silent for anybody who leaves
+    /// the switch flipped — which, for a phone that lives in a pocket, is most
+    /// people most of the time. Playback is the whole point of a pronunciation
+    /// clip, so the category is raised to match, and ducked rather than mixed:
+    /// a word said over a podcast is a word not heard.
+    ///
+    /// Once per launch, on the first clip rather than at startup, so an app
+    /// that never plays anything never touches the audio system at all.
+    /// macOS has no such switch and no session to configure.
+    private func activateSession() {
+        #if os(iOS)
+        guard !sessionIsActive else { return }
+        sessionIsActive = true
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try? session.setActive(true)
+        #endif
+    }
+
+    #if os(iOS)
+    private var sessionIsActive = false
+    #endif
+
     private func start(_ data: Data, id: String) {
+        activateSession()
         do {
             let player = try AVAudioPlayer(data: data)
             player.delegate = self

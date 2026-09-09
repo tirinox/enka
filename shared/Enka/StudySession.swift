@@ -194,6 +194,17 @@ final class StudySession: ObservableObject {
     /// rated card followed by an error pane, every time.
     private func restart(force: Bool = false) {
         work?.cancel()
+        // Nothing to replace, and fetching a replacement would be worse than
+        // doing nothing: `study/next` marks what it hands back as shown, so a
+        // mode changed from a settings screen would quietly count a card that
+        // nobody was looking at. The phase is dropped instead, which is what
+        // makes the next arrival fetch under the new setting rather than
+        // showing a card chosen under the old one.
+        guard isActive else {
+            if force { lastInterval = nil }
+            phase = .idle
+            return
+        }
         work = Task { await loadNext(force: force) }
     }
 
@@ -323,6 +334,33 @@ final class StudySession: ObservableObject {
                 await loadNext()
             }
         }
+    }
+
+    /// Puts an edited card back under the question it is being asked in.
+    ///
+    /// The card on screen can be edited from the study screen itself — a
+    /// meaning filled in at the moment of failing to remember it is the single
+    /// most useful edit there is, and sending somebody to another tab for it
+    /// loses both the card and the impulse. What must not change underneath
+    /// them is which side they were asked, so the direction is kept: only a
+    /// card whose meaning has just been emptied is forced back to term-first,
+    /// because there is now nothing on the other side to prompt with.
+    ///
+    /// Ignores a card that is not the one showing — an edit made elsewhere and
+    /// landing late has nothing to say about what is on screen now.
+    func replaceCurrent(with card: Card) {
+        guard case let .card(study, revealed) = phase, study.card.id == card.id else { return }
+        let hasMeaning = !(card.definition ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        phase = .card(
+            StudyCard(
+                card: card,
+                direction: hasMeaning ? study.direction : .termToDef,
+                mode: study.mode,
+                remainingDue: study.remainingDue,
+                intervals: study.intervals
+            ),
+            revealed: revealed
+        )
     }
 
     /// Undo answers with the card but not with a direction, so one is chosen

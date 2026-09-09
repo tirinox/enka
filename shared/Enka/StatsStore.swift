@@ -62,22 +62,63 @@ final class StatsStore: ObservableObject {
 
     func refresh() {
         work?.cancel()
+        work = Task { await load() }
+    }
+
+    /// The same fetch, awaited — what a pull-to-refresh gesture holds its
+    /// spinner open for. `refresh` cannot be it: a gesture that returns the
+    /// moment a task is spawned snaps shut before the numbers under it move.
+    func reload() async {
+        work?.cancel()
+        await load()
+    }
+
+    private func load() async {
         isLoading = stats == nil
-        work = Task {
-            do {
-                let response = try await session.run { try await $0.stats() }
-                guard !Task.isCancelled else { return }
-                stats = response
-                dueNow = response.schedule.dueNow
-                notice = nil
-            } catch is CancellationError {
-                return
-            } catch let error as APIError {
-                notice = error.message
-            } catch {
-                notice = error.localizedDescription
-            }
-            isLoading = false
+        do {
+            let response = try await session.run { try await $0.stats() }
+            guard !Task.isCancelled else { return }
+            stats = response
+            dueNow = response.schedule.dueNow
+            notice = nil
+        } catch is CancellationError {
+            return
+        } catch let error as APIError {
+            notice = error.message
+        } catch {
+            notice = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    // MARK: - Shaping
+
+    /// Fills the gaps in `reviews_last_30_days`.
+    ///
+    /// `/stats` reports only the days that had reviews in them — two rows, if
+    /// you studied twice this month. Drawn straight, that is two bars stretched
+    /// across the width of a chart, which reads as "you studied constantly" and
+    /// means the opposite. Thirty slots, most of them zero, is the honest
+    /// picture and the one the web client's heatmap draws.
+    ///
+    /// Days are cut in UTC because that is how the server groups them; using
+    /// the local calendar here would shift every bar by one for anybody far
+    /// enough east or west.
+    static func series(from days: [DailyActivity], length: Int = 30) -> [DailyActivity] {
+        let byDay = Dictionary(days.map { ($0.day, $0) }, uniquingKeysWith: { first, _ in first })
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        let today = Date()
+        return (0..<length).reversed().compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            let key = formatter.string(from: date)
+            return byDay[key] ?? DailyActivity(day: key, reviews: 0, correct: 0)
         }
     }
 }

@@ -8,7 +8,7 @@ struct RootView: View {
         Group {
             switch session.state {
             case .connected:
-                StudyView()
+                MainTabView()
             case .connecting:
                 // `restore()` runs before the first frame, so this is what a
                 // cold launch with a token in the keychain actually shows.

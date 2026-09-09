@@ -136,9 +136,13 @@ actor APIClient {
         query: [(String, String?)] = [],
         body: Data? = nil,
         anonymous: Bool = false,
-        versioned: Bool = true
+        versioned: Bool = true,
+        timeout: TimeInterval? = nil
     ) async throws -> T {
-        let data = try await raw(path, method: method, query: query, body: body, anonymous: anonymous, versioned: versioned)
+        let data = try await raw(
+            path, method: method, query: query, body: body,
+            anonymous: anonymous, versioned: versioned, timeout: timeout
+        )
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
@@ -153,10 +157,16 @@ actor APIClient {
         query: [(String, String?)] = [],
         body: Data? = nil,
         anonymous: Bool = false,
-        versioned: Bool = true
+        versioned: Bool = true,
+        timeout: TimeInterval? = nil
     ) async throws -> Data {
         var request = URLRequest(url: url(path, query, versioned: versioned))
         request.httpMethod = method
+        // The session's ten seconds is right for everything the collection
+        // answers out of Postgres. One endpoint is not that — see
+        // `generateDefinition` — and says so per request rather than by
+        // slackening the deadline every other call is held to.
+        if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body {
             request.httpBody = body
@@ -260,28 +270,76 @@ actor APIClient {
         try await send("cards/search", query: [("q", query), ("limit", String(limit))])
     }
 
+    /// Browsing, as opposed to finding. `search` tolerates typos and answers
+    /// "do I have this word?"; this one answers "what is in here?", in pages,
+    /// newest first, with the filters a list needs to be narrowed by.
+    ///
+    /// `q` here is a plain substring match, not the trigram search — the two
+    /// endpoints are different questions and the caller picks which it is
+    /// asking.
+    func cards(
+        matching text: String? = nil,
+        tags: [String] = [],
+        suspended: Bool? = nil,
+        limit: Int = 40,
+        offset: Int = 0
+    ) async throws -> Page<Card> {
+        try await send("cards", query: [
+            ("q", text),
+            ("suspended", suspended.map(String.init)),
+            ("sort", "created_at"),
+            ("order", "desc"),
+            ("limit", String(limit)),
+            ("offset", String(offset)),
+        ] + tags.map { ("tags", $0) })
+    }
+
     func create(_ card: CardCreate) async throws -> Card {
         try await send("cards", method: "POST", body: try encode(card))
     }
 
+    /// The one PATCH. Everything that edits a card — the editor's whole form,
+    /// the search tab's suspend, an accepted AI definition — arrives here as a
+    /// patch holding only what it means to change.
+    func update(cardID: String, _ patch: CardPatch) async throws -> Card {
+        try await send("cards/\(cardID)", method: "PATCH", body: try encode(patch))
+    }
+
     func update(cardID: String, suspended: Bool) async throws -> Card {
-        struct Patch: Encodable { let suspended: Bool }
-        return try await send("cards/\(cardID)", method: "PATCH", body: try encode(Patch(suspended: suspended)))
+        try await update(cardID: cardID, CardPatch(suspended: suspended))
     }
 
     func update(cardID: String, definition: String) async throws -> Card {
-        struct Patch: Encodable { let definition: String }
-        return try await send("cards/\(cardID)", method: "PATCH", body: try encode(Patch(definition: definition)))
+        try await update(cardID: cardID, CardPatch(definition: .some(definition)))
+    }
+
+    /// Soft by default, which is what makes it safe from a phone: the row
+    /// survives as a tombstone, the other clients learn about it on their next
+    /// sync, and `POST /cards/{id}/restore` puts it back.
+    func deleteCard(id: String, hard: Bool = false) async throws {
+        _ = try await raw("cards/\(id)", method: "DELETE", query: [("hard", hard ? "true" : nil)])
+    }
+
+    func restoreCard(id: String) async throws -> Card {
+        try await send("cards/\(id)/restore", method: "POST")
     }
 
     /// Not card-scoped — works on a term that hasn't been saved yet, which is
     /// what the Add tab needs. Never persisted server-side; the caller saves
     /// the result itself (as the definition it's about to create, or via
     /// `update(cardID:definition:)`) if it wants to keep it.
+    ///
+    /// The one call with a deadline of its own. Everything else here is a
+    /// query the server answers in milliseconds, and ten seconds means the
+    /// server is gone; this one is a language model writing a sentence, which
+    /// takes fifteen or twenty and is not a fault. Under the shared timeout it
+    /// failed every single time, saying "cannot reach the server" about a
+    /// server that was working perfectly.
     func generateDefinition(term: String, mode: DefinitionMode) async throws -> DefinitionGenerateResponse {
         struct Body: Encodable { let term: String; let mode: DefinitionMode }
         return try await send(
-            "definitions/generate", method: "POST", body: try encode(Body(term: term, mode: mode))
+            "definitions/generate", method: "POST", body: try encode(Body(term: term, mode: mode)),
+            timeout: 90
         )
     }
 

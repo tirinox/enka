@@ -47,7 +47,7 @@ struct StatsPane: View {
                 Tile(value: "\(response.study.totalReviews)", label: "reviews")
             }
 
-            Activity(days: Self.series(from: response.reviewsLast30Days))
+            Activity(days: StatsStore.series(from: response.reviewsLast30Days))
 
             HStack(alignment: .top, spacing: 18) {
                 Breakdown(schedule: response.schedule, collection: response.collection, study: response.study)
@@ -57,37 +57,6 @@ struct StatsPane: View {
             }
 
             Spacer(minLength: 0)
-        }
-    }
-}
-
-extension StatsPane {
-    /// Fills the gaps.
-    ///
-    /// `/stats` reports only the days that had reviews in them — two rows, if
-    /// you studied twice this month. Drawn straight, that is two bars stretched
-    /// across the width of the panel, which reads as "you studied constantly"
-    /// and means the opposite. Thirty slots, most of them zero, is the honest
-    /// picture and the one the web client's heatmap draws.
-    ///
-    /// Days are cut in UTC because that is how the server groups them; using
-    /// the local calendar here would shift every bar by one for anybody far
-    /// enough east or west.
-    static func series(from days: [DailyActivity], length: Int = 30) -> [DailyActivity] {
-        let byDay = Dictionary(days.map { ($0.day, $0) }, uniquingKeysWith: { first, _ in first })
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-
-        let today = Date()
-        return (0..<length).reversed().compactMap { offset in
-            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
-            let key = formatter.string(from: date)
-            return byDay[key] ?? DailyActivity(day: key, reviews: 0, correct: 0)
         }
     }
 }
