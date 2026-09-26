@@ -177,8 +177,10 @@ backup: ## Dump database + audio into backups/
 	@mkdir -p $(BACKUP_DIR)
 	$(DC) exec -T db pg_dump -U $(call env_get,POSTGRES_USER) -d $(call env_get,POSTGRES_DB) \
 		> $(BACKUP_DIR)/enka-$(STAMP).sql
-	$(DC) run --rm -T -v "$$PWD/$(BACKUP_DIR):/backup" api \
-		tar czf /backup/enka-audio-$(STAMP).tar.gz -C /data audio
+	@# Streamed out rather than written to a bind mount: the container runs as
+	@# uid 1000, which on a Linux host cannot write into a root-owned backups/.
+	$(DC) exec -T api tar czf - -C /data audio \
+		> $(BACKUP_DIR)/enka-audio-$(STAMP).tar.gz
 	@echo "Wrote $(BACKUP_DIR)/enka-$(STAMP).sql and $(BACKUP_DIR)/enka-audio-$(STAMP).tar.gz"
 
 .PHONY: restore
