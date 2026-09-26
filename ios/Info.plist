@@ -43,5 +43,10 @@
 	</dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- The server a fresh install starts with. `make ios` and `make
+	     ios-device` pass CLIENT_DEFAULT_SERVER from .env as a build setting;
+	     built from Xcode it is empty, and Preferences falls back to localhost. -->
+	<key>EnkaDefaultServer</key>
+	<string>$(CLIENT_DEFAULT_SERVER)</string>
 </dict>
 </plist>

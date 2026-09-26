@@ -16,6 +16,9 @@ PACKAGE="$(cd "$ROOT/.." && pwd)"
 CONFIG="${1:-release}"
 APP="$ROOT/build/Enka.app"
 VERSION="$(sed -n 's/^VERSION=//p' "$ROOT/Scripts/version" 2>/dev/null || echo 0.1.0)"
+# The server a fresh install starts with; `make mac` passes it from .env.
+# Empty is fine — Preferences falls back to localhost.
+DEFAULT_SERVER="${CLIENT_DEFAULT_SERVER:-}"
 
 echo "==> swift build -c $CONFIG"
 swift build -c "$CONFIG" --package-path "$PACKAGE"
@@ -46,6 +49,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSSupportsAutomaticTermination</key><false/>
     <key>NSSupportsSuddenTermination</key><false/>
     <key>NSHumanReadableCopyright</key><string>MIT License</string>
+    <key>EnkaDefaultServer</key><string>$DEFAULT_SERVER</string>
 </dict>
 </plist>
 PLIST

@@ -217,7 +217,9 @@ mac: ## Build the macOS app into macos/build/Enka.app
 	@# .env otherwise, so it can be set once and forgotten. Empty means ad-hoc —
 	@# see the comment in macos/Scripts/bundle.sh for what that costs.
 	@identity="$${CODESIGN_IDENTITY:-$(call env_get,MACOS_CODESIGN_IDENTITY)}"; \
-	 cd macos && CODESIGN_IDENTITY="$$identity" ./Scripts/bundle.sh release
+	 server="$${CLIENT_DEFAULT_SERVER:-$(call env_get,CLIENT_DEFAULT_SERVER)}"; \
+	 cd macos && CODESIGN_IDENTITY="$$identity" CLIENT_DEFAULT_SERVER="$$server" \
+		./Scripts/bundle.sh release
 
 .PHONY: mac-identity
 mac-identity: ## List code-signing identities usable for MACOS_CODESIGN_IDENTITY
@@ -282,7 +284,9 @@ ios: ## Build the iOS app for the simulator into ios/build
 	@# compiler invocations and this hides all of them but the errors.
 	xcodebuild -quiet -project $(IOS_PROJECT) -scheme Enka -configuration Debug \
 		-destination 'platform=iOS Simulator,name=$(SIM)' \
-		-derivedDataPath $(IOS_DD) build
+		-derivedDataPath $(IOS_DD) \
+		CLIENT_DEFAULT_SERVER="$${CLIENT_DEFAULT_SERVER:-$(call env_get,CLIENT_DEFAULT_SERVER)}" \
+		build
 
 .PHONY: ios-run
 ios-run: ios ## Build the iOS app, then install and launch it on the simulator

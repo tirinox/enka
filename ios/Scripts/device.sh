@@ -33,6 +33,11 @@ if [ -z "$TEAM" ]; then
     exit 1
 fi
 
+# -------------------------------------------------------------- server -----
+# The address a fresh install starts with, from the environment or .env. Empty
+# is fine: the app falls back to localhost.
+SERVER="${CLIENT_DEFAULT_SERVER:-$(grep -E '^CLIENT_DEFAULT_SERVER=' "$REPO/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'"'')}"
+
 # -------------------------------------------------------------- device -----
 # The cable, not the network. A device on Wi-Fi is listed too and installs to
 # it work, but "install on the phone in front of me" is what this is for, and
@@ -74,6 +79,7 @@ xcodebuild -quiet -project "$PROJECT" -scheme Enka -configuration Debug \
     -destination "platform=iOS,id=$UDID" \
     -derivedDataPath "$DD" \
     DEVELOPMENT_TEAM="$TEAM" \
+    CLIENT_DEFAULT_SERVER="$SERVER" \
     -allowProvisioningUpdates \
     build
 

@@ -18,8 +18,18 @@ enum Preferences {
         static let tokenExpiry = "tokenExpiresAt"
     }
 
-    /// What `make up` prints, and what a fresh checkout serves on.
-    static let defaultServer = "http://localhost:8010"
+    /// The address a fresh install starts with, prefilled in the sign-in field.
+    ///
+    /// CLIENT_DEFAULT_SERVER from .env, which `make mac`, `make ios` and
+    /// `make ios-device` write into Info.plist as EnkaDefaultServer. Without
+    /// one — a build straight from Xcode, or a .env that does not set it —
+    /// it is what `make up` serves on. An address somebody has already
+    /// connected to is saved and wins over this either way.
+    static let defaultServer: String = {
+        let baked = Bundle.main.object(forInfoDictionaryKey: "EnkaDefaultServer") as? String
+        let trimmed = baked?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "http://localhost:8010" : trimmed
+    }()
 
     static var serverURL: String {
         get { defaults.string(forKey: Key.serverURL) ?? defaultServer }
