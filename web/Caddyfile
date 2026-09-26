@@ -1,0 +1,23 @@
+# Serves the built client inside its container. TLS, compression and access
+# logs are the ingress's job; this one only knows about files.
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	root * /srv
+
+	# Vite fingerprints everything under /assets, so those never go stale.
+	# Everything else — index.html above all — is rechecked on every load, so
+	# a deploy shows up without a hard refresh.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@rest not path /assets/*
+	header @rest Cache-Control "no-cache"
+
+	# History-mode router: a path the server has no file for is a page of the
+	# app, not a 404.
+	try_files {path} /index.html
+	file_server
+}

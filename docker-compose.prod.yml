@@ -1,0 +1,50 @@
+# Production overlay, layered over docker-compose.yml. Not auto-loaded: the
+# server's .env names it,
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+#
+# so plain `docker compose` and every make target run in production mode
+# there, and docker-compose.override.yml (hot reload, bind mounts) never does.
+#
+# Nothing here is published to the internet. The API and the web client join
+# the host's shared `edge` network, and the ingress on it — a separate
+# project that holds 80/443 for every site on the host — proxies to them by
+# alias: /api, /health and the docs to enka-api, everything else to enka-web.
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+services:
+  db:
+    logging: *logging
+
+  api:
+    environment:
+      ENKA_ENV: prod
+      # Uvicorn only believes X-Forwarded-For from the addresses listed here.
+      # The login throttle keys on the client address, so without this every
+      # request looks like the ingress, and one scanner guessing secrets
+      # locks the owner out too. Safe as "*" because only the ingress and the
+      # host itself can reach the port.
+      FORWARDED_ALLOW_IPS: "*"
+    ports:
+      # Loopback only: for `make token`, `make stats` and curl on the host.
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    networks:
+      default:
+      edge:
+        aliases: [enka-api]
+    logging: *logging
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    networks:
+      edge:
+        aliases: [enka-web]
+    logging: *logging
+
+networks:
+  edge:
+    external: true

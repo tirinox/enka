@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 DC          := docker compose
-PROD_DC     := docker compose -f docker-compose.yml
+PROD_DC     := docker compose -f docker-compose.yml -f docker-compose.prod.yml
 ENV_FILE    := .env
 BACKUP_DIR  := backups
 STAMP       := $(shell date +%Y%m%d-%H%M%S)
@@ -68,7 +68,7 @@ rebuild: ## Rebuild images from scratch and start
 	$(DC) up -d
 
 .PHONY: prod-up
-prod-up: ## Start without the dev override (no reload, no dev deps)
+prod-up: ## Start in production mode (needs the `edge` network; see README)
 	$(PROD_DC) up -d --build
 
 .PHONY: ps
@@ -185,6 +185,22 @@ backup: ## Dump database + audio into backups/
 restore: ## Restore a dump: make restore f=backups/enka-....sql
 	@[ -n "$(f)" ] || { echo 'usage: make restore f=backups/enka-20260818-120000.sql'; exit 1; }
 	$(DC) exec -T db psql -U $(call env_get,POSTGRES_USER) -d $(call env_get,POSTGRES_DB) < $(f)
+
+# --------------------------------------------------------------- deploy ----
+# The server is a clone of this repository whose .env layers
+# docker-compose.prod.yml on, so a deploy is whatever is on origin/main.
+DEPLOY_HOST ?= exleader
+DEPLOY_DIR  ?= /srv/enka
+DEPLOY_URL  ?= https://enka.thornode.org
+
+.PHONY: deploy
+deploy: ## Roll the server forward to origin/main (push first)
+	ssh $(DEPLOY_HOST) 'cd $(DEPLOY_DIR) && git pull --ff-only && docker compose up -d --build --wait'
+	@curl -fsS -m 10 $(DEPLOY_URL)/health && echo
+
+.PHONY: deploy-logs
+deploy-logs: ## Tail the server's logs
+	ssh -t $(DEPLOY_HOST) 'cd $(DEPLOY_DIR) && docker compose logs -f --tail=100'
 
 # ----------------------------------------------------------- macOS app -----
 MAC_APP     := macos/build/Enka.app

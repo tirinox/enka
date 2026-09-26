@@ -38,6 +38,9 @@ build, so set `VITE_API_BASE` at build time if the API lives on another origin:
 VITE_API_BASE=https://enka.example.com npm run build --prefix web
 ```
 
+In production it is built into a small Caddy image by `web/Dockerfile` and
+served on the API's own origin — see Deploying in the root README.
+
 ## Keyboard
 
 Studying is meant to be done without the mouse.

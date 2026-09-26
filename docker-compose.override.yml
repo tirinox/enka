@@ -2,10 +2,10 @@
 #
 # It builds the `dev` image stage (dev dependencies included, so `make test`
 # and `make lint` work inside the container), bind-mounts the source for
-# hot-reload, and exposes Postgres to the host so you can point a GUI at it.
+# hot-reload, and exposes the API and Postgres to the host.
 #
-# Deploying somewhere real?  Use `docker compose -f docker-compose.yml ...`
-# to skip this file entirely — that's what `make prod-up` does.
+# Deploying somewhere real?  docker-compose.prod.yml replaces this file there;
+# its header says how.
 
 services:
   db:
@@ -15,6 +15,8 @@ services:
   api:
     build:
       target: dev
+    ports:
+      - "${API_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
       - audio:/data/audio

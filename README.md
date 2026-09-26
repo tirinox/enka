@@ -202,6 +202,33 @@ make backup                                 # database + audio, into backups/
 make restore f=backups/enka-20260818.sql
 ```
 
+## Deploying
+
+The server is a clone of this repository in `/srv/enka`, behind a shared
+ingress (Caddy in `/srv/ingress`) that holds ports 80 and 443 for every site
+on the host and fetches certificates on its own. Enka publishes nothing: the
+API and the web client join the host's `edge` network, and the ingress sends
+`/api`, `/health` and the docs to one and everything else to the other.
+
+```bash
+make deploy        # git pull on the server, rebuild what changed, wait healthy
+make deploy-logs
+```
+
+`make deploy` ships origin/main, so push first. On the server itself the
+usual targets work as they do locally — `make backup`, `make psql`, `make
+secret` — because its `.env` sets
+`COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml`.
+
+Setting up a new host is: `docker network create edge`, an ingress with a
+site block pointing at `enka-api:8000` and `enka-web:80`, then
+
+```bash
+git clone https://github.com/tirinox/enka.git /srv/enka && cd /srv/enka
+make env           # fresh secrets; then uncomment COMPOSE_FILE in .env
+docker compose up -d --build --wait
+```
+
 ## Notes on some choices
 
 **Postgres, not SQLite** — `pg_trgm` gives real fuzzy search with an index and
@@ -239,5 +266,6 @@ The ones worth knowing:
 | `ENKA_MAX_AUDIO_MB` | `25` | per-clip upload limit |
 | `ENKA_FSRS_DESIRED_RETENTION` | `0.9` | higher = more frequent reviews |
 | `ENKA_CORS_ORIGINS` | `*` | tighten before exposing the API |
+| `COMPOSE_FILE` | — | set on the server only; see [Deploying](#deploying) |
 
 The API refuses to start if the secrets are still at their placeholder values.
