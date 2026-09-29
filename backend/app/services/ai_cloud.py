@@ -28,11 +28,20 @@ class AICloudError(Exception):
 
 
 class AICloudClient:
-    def __init__(self, base_url: str, model: str, api_key: str, timeout: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        api_key: str,
+        timeout: float,
+        *,
+        disable_thinking: bool = False,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._api_key = api_key
         self._timeout = timeout
+        self._disable_thinking = disable_thinking
 
     async def generate(self, prompt: str) -> str:
         """Returns the model's raw text response.
@@ -47,19 +56,25 @@ class AICloudClient:
             self._model,
             len(prompt),
         )
+        body: dict = {
+            "model": self._model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            # Greedy decoding: a translation/definition has one best answer,
+            # not a range of creative ones. Only honoured with thinking off —
+            # DeepSeek ignores temperature in thinking mode.
+            "temperature": 0.0,
+        }
+        if self._disable_thinking:
+            # DeepSeek's extension, not part of the OpenAI shape — see
+            # ai_disable_thinking in app/core/config.py.
+            body["thinking"] = {"type": "disabled"}
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
                     f"{self._base_url}/chat/completions",
                     headers={"Authorization": f"Bearer {self._api_key}"},
-                    json={
-                        "model": self._model,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "stream": False,
-                        # Greedy decoding: a translation/definition has one best
-                        # answer, not a range of creative ones.
-                        "temperature": 0.0,
-                    },
+                    json=body,
                 )
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:

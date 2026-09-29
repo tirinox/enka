@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     ai_model: str = Field(default="deepseek-v4-flash", validation_alias="AI_MODEL")
     ai_url: str = Field(default="https://api.deepseek.com", validation_alias="AI_URL")
     ai_timeout_seconds: float = Field(default=60.0, validation_alias="AI_TIMEOUT_SECONDS")
+    #: DeepSeek V4 reasons before answering unless told not to — thousands of
+    #: hidden tokens and 10-25 s for a three-word translation that comes back
+    #: in under a second without it, and no better. Sends DeepSeek's
+    #: `"thinking": {"type": "disabled"}`; set false for a provider that
+    #: rejects unknown fields (OpenAI does).
+    ai_disable_thinking: bool = Field(default=True, validation_alias="AI_DISABLE_THINKING")
 
     # Local Ollama server — unused by default (see app/api/deps.py), kept as
     # a fallback option for anyone who'd rather run a model locally than pay

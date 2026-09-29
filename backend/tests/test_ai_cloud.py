@@ -53,6 +53,32 @@ async def test_generate_returns_content_on_success(monkeypatch):
     assert result == "a window"
 
 
+@pytest.mark.parametrize("disable_thinking", [True, False])
+async def test_generate_sends_thinking_off_only_when_asked(monkeypatch, disable_thinking):
+    """DeepSeek's `thinking` field is off-spec — a provider that rejects
+    unknown fields must be able to get a request without it."""
+    sent: dict = {}
+
+    async def fake_post(self, url, headers=None, json=None):
+        sent.update(json)
+        return _FakeResponse(200, {"choices": [{"message": {"content": "a window"}}]})
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    client = AICloudClient(
+        "https://api.deepseek.com",
+        "deepseek-v4-flash",
+        "key",
+        5.0,
+        disable_thinking=disable_thinking,
+    )
+    await client.generate("define das Fenster")
+
+    if disable_thinking:
+        assert sent["thinking"] == {"type": "disabled"}
+    else:
+        assert "thinking" not in sent
+
+
 async def test_generate_raises_on_non_2xx_status(monkeypatch):
     _patch_post(monkeypatch, _FakeResponse(401, {}))
     with pytest.raises(AICloudError):

@@ -34,7 +34,11 @@ StorageDep = Annotated[LocalStorage, Depends(get_storage)]
 @functools.lru_cache
 def get_ai_client() -> AICloudClient:
     return AICloudClient(
-        settings.ai_url, settings.ai_model, settings.ai_api_key, settings.ai_timeout_seconds
+        settings.ai_url,
+        settings.ai_model,
+        settings.ai_api_key,
+        settings.ai_timeout_seconds,
+        disable_thinking=settings.ai_disable_thinking,
     )
 
 
