@@ -53,10 +53,20 @@ async def test_generate_returns_content_on_success(monkeypatch):
     assert result == "a window"
 
 
-@pytest.mark.parametrize("disable_thinking", [True, False])
-async def test_generate_sends_thinking_off_only_when_asked(monkeypatch, disable_thinking):
-    """DeepSeek's `thinking` field is off-spec — a provider that rejects
-    unknown fields must be able to get a request without it."""
+@pytest.mark.parametrize(
+    ("base_url", "disable_thinking", "expected"),
+    [
+        ("https://api.deepseek.com", True, {"thinking": {"type": "disabled"}}),
+        ("https://openrouter.ai/api/v1", True, {"reasoning": {"effort": "none"}}),
+        ("https://api.deepseek.com", False, {}),
+        ("https://openrouter.ai/api/v1", False, {}),
+    ],
+)
+async def test_generate_turns_thinking_off_in_the_providers_dialect(
+    monkeypatch, base_url, disable_thinking, expected
+):
+    """Both fields are off-spec — each provider gets only its own, and a
+    provider that rejects unknown fields must be able to get neither."""
     sent: dict = {}
 
     async def fake_post(self, url, headers=None, json=None):
@@ -65,18 +75,11 @@ async def test_generate_sends_thinking_off_only_when_asked(monkeypatch, disable_
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
     client = AICloudClient(
-        "https://api.deepseek.com",
-        "deepseek-v4-flash",
-        "key",
-        5.0,
-        disable_thinking=disable_thinking,
+        base_url, "deepseek-v4-flash", "key", 5.0, disable_thinking=disable_thinking
     )
     await client.generate("define das Fenster")
 
-    if disable_thinking:
-        assert sent["thinking"] == {"type": "disabled"}
-    else:
-        assert "thinking" not in sent
+    assert {k: sent[k] for k in ("thinking", "reasoning") if k in sent} == expected
 
 
 async def test_generate_raises_on_non_2xx_status(monkeypatch):

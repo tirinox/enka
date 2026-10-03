@@ -4,14 +4,15 @@ Kept separate from app/services/definitions.py (which owns prompting and
 response handling) so it can be swapped for a fake in tests via
 app.dependency_overrides — the same seam StorageDep uses for LocalStorage.
 
-Targets the `/chat/completions` shape shared by DeepSeek, OpenAI, and most
-other hosted providers, so switching provider is a `.env` edit (AI_URL,
-AI_MODEL, AI_API_KEY), not a code change.
+Targets the `/chat/completions` shape shared by DeepSeek, OpenRouter, OpenAI,
+and most other hosted providers, so switching provider is a `.env` edit
+(AI_URL, AI_MODEL, AI_API_KEY), not a code change.
 """
 
 from __future__ import annotations
 
 import logging
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -21,6 +22,18 @@ logger = logging.getLogger("enka")
 #: key"); cap anyway so a provider returning an HTML error page can't dump
 #: kilobytes into the log.
 _MAX_LOGGED_BODY = 500
+
+
+def _thinking_off_fields(base_url: str) -> dict:
+    """The request fields that turn reasoning off, in the dialect of the
+    provider at `base_url`. Neither is part of the OpenAI shape."""
+    host = urlsplit(base_url).hostname or ""
+    if host == "openrouter.ai" or host.endswith(".openrouter.ai"):
+        # OpenRouter's own field, which it translates for whichever upstream
+        # serves the model. DeepSeek's `thinking` is not guaranteed to be
+        # forwarded, and means nothing to a non-DeepSeek host of the model.
+        return {"reasoning": {"effort": "none"}}
+    return {"thinking": {"type": "disabled"}}
 
 
 class AICloudError(Exception):
@@ -41,7 +54,7 @@ class AICloudClient:
         self._model = model
         self._api_key = api_key
         self._timeout = timeout
-        self._disable_thinking = disable_thinking
+        self._thinking_fields = _thinking_off_fields(base_url) if disable_thinking else {}
 
     async def generate(self, prompt: str) -> str:
         """Returns the model's raw text response.
@@ -64,11 +77,9 @@ class AICloudClient:
             # not a range of creative ones. Only honoured with thinking off —
             # DeepSeek ignores temperature in thinking mode.
             "temperature": 0.0,
+            # See ai_disable_thinking in app/core/config.py.
+            **self._thinking_fields,
         }
-        if self._disable_thinking:
-            # DeepSeek's extension, not part of the OpenAI shape — see
-            # ai_disable_thinking in app/core/config.py.
-            body["thinking"] = {"type": "disabled"}
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
