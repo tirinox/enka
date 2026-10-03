@@ -51,9 +51,11 @@ so it never fights the person typing.
 make ios-device
 ```
 
-Builds, installs over the cable and launches. It picks the wired device, so a
-phone that is also on Wi-Fi is not ambiguous, and prints the date the signature
-runs out.
+Builds, installs and launches, and prints the date the signature runs out. The
+phone on the cable wins, so one that is also on Wi-Fi is not ambiguous; without
+a cable it finds the iPhone on the same network as the Mac. `IOS_LAUNCH=0`
+installs without opening the app. It always installs over what is there and
+never removes the app first, which would take its data with it.
 
 Getting there the first time needs three things the command line cannot do:
 
@@ -69,9 +71,9 @@ here is the thing that makes it appear.
 & Capabilities, select the phone, ⌘R. This registers the device and issues the
 profile — and on a *free* personal team it is the only thing that can, because
 `xcodebuild -allowProvisioningUpdates` answers "No Account for Team" for those
-from the command line however signed-in Xcode is. Once the profile is on disk
-`make ios-device` works on its own, because it no longer has to ask Apple
-anything.
+from the command line however signed-in Xcode is. Once the phone is registered
+`make ios-device` works on its own, and renewing the profile for it from the
+command line works too — which is what the daily install below depends on.
 
 The phone then needs to be told the developer is not a stranger: Settings →
 General → VPN & Device Management → the certificate → Trust.
@@ -80,6 +82,23 @@ A free personal team signs for **seven days** and allows three devices. When the
 week is up the app stops launching, and another `make ios-device` fixes it. A
 paid team signs for a year — worth switching to if this stops being a novelty,
 and the reason `IOS_DEVELOPMENT_TEAM` in `.env` exists.
+
+Or let the Mac do it:
+
+```bash
+make ios-daily-on
+```
+
+A launchd job then tries every hour, and catches up on wake, since a laptop
+asleep at a fixed time would miss it. The first try of the day that finds the
+phone installs, without opening the app; the rest that day do nothing.
+xcodebuild reuses a cached profile until the day it runs out, so installing
+daily would only repeat the same expiry date — `make ios-device` sets aside a
+profile with under two days left, and Apple issues a fresh week. It builds
+whatever the main checkout holds at that moment, uncommitted edits included.
+`scripts/ios-daily.sh status` says whether it is on and when it last
+installed; the log is `ios/build-device/daily-install.log`. `make
+ios-daily-off` stops it.
 
 Once it is on the phone, `localhost` means the phone. `make lan` prints the
 address of the Mac to type instead.

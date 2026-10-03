@@ -304,10 +304,18 @@ ios-icon: ## Re-render the iOS app icon from ios/Scripts/make-icon.swift
 	cd ios && swift Scripts/make-icon.swift Enka/Assets.xcassets/AppIcon.appiconset
 
 .PHONY: ios-device
-ios-device: ## Build and install on the iPhone connected by cable
+ios-device: ## Build, install and launch on the iPhone, by cable or Wi-Fi (IOS_LAUNCH=0, DEVICE=<udid>)
 	@# Needs IOS_DEVELOPMENT_TEAM in .env, and Developer Mode on the phone.
 	@# The script says so if either is missing.
 	./ios/Scripts/device.sh
+
+.PHONY: ios-daily-on
+ios-daily-on: ## Install on the iPhone once a day by itself (launchd, hourly tries until the phone is reachable)
+	@scripts/ios-daily.sh on
+
+.PHONY: ios-daily-off
+ios-daily-off: ## Stop the daily install
+	@scripts/ios-daily.sh off
 
 .PHONY: ios-clean
 ios-clean: ## Remove the iOS build products
