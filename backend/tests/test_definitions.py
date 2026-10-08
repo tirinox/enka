@@ -320,3 +320,88 @@ async def test_empty_result_is_logged_as_a_warning(enka_logs):
             client, "lock", DefinitionMode.NATIVE_LANGUAGE, "ru"
         )
     assert "empty" in _text(enka_logs)
+
+
+# ------------------------------------------------------------- term check --
+class _RoutingClient:
+    """Answers the term-check prompt and the definition prompt differently."""
+
+    def __init__(self, definition: str, check: str | Exception):
+        self._definition = definition
+        self._check = check
+
+    async def generate(self, prompt: str) -> str:
+        if prompt.startswith(definitions_service._CHECK_PROMPT):
+            if isinstance(self._check, Exception):
+                raise self._check
+            return self._check
+        return self._definition
+
+
+@pytest.mark.parametrize(
+    ("raw", "issue", "suggestion"),
+    [
+        ('{"issue": null}', None, None),
+        (
+            '{"issue": "misspelled", "note": "Typo.", "suggestion": "receive"}',
+            "misspelled",
+            "receive",
+        ),
+        (
+            '```json\n{"issue": "outdated", "note": "Old.", "suggestion": "Dass"}\n```',
+            "outdated",
+            "Dass",
+        ),
+        ('{"issue": "vulgar", "note": "Rude.", "suggestion": null}', "vulgar", None),
+        # Suggesting the very term that was typed is no suggestion.
+        ('{"issue": "vulgar", "note": "Rude.", "suggestion": "recieve"}', "vulgar", None),
+        ('{"issue": "weird", "note": "?"}', None, None),
+        ("not json at all", None, None),
+        ("[]", None, None),
+    ],
+)
+def test_parse_check(raw, issue, suggestion):
+    check = definitions_service._parse_check(raw, "recieve")
+    assert (check.issue if check else None) == issue
+    assert (check.suggestion if check else None) == suggestion
+
+
+async def test_check_term_never_raises():
+    assert await definitions_service.check_term(_StubClient(AICloudError("down")), "x") is None
+
+
+async def test_generate_endpoint_returns_term_check(client):
+    from app.main import app
+
+    app.dependency_overrides[get_ai_client] = lambda: _RoutingClient(
+        "to get something",
+        '{"issue": "misspelled", "note": "i before e.", "suggestion": "receive"}',
+    )
+    try:
+        response = await client.post(
+            "/api/v1/definitions/generate", json={"term": "recieve", "mode": "same_language"}
+        )
+    finally:
+        app.dependency_overrides.pop(get_ai_client, None)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["definition"] == "to get something"
+    assert body["term_check"] == {
+        "issue": "misspelled",
+        "note": "i before e.",
+        "suggestion": "receive",
+    }
+
+
+async def test_failed_term_check_still_returns_the_definition(client):
+    from app.main import app
+
+    app.dependency_overrides[get_ai_client] = lambda: _RoutingClient("a window", AICloudError("x"))
+    try:
+        response = await client.post(
+            "/api/v1/definitions/generate", json={"term": "das Fenster", "mode": "same_language"}
+        )
+    finally:
+        app.dependency_overrides.pop(get_ai_client, None)
+    assert response.status_code == 200
+    assert response.json() == {"definition": "a window", "term_check": None}

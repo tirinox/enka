@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 
 from app.api.deps import AIClientDep, OwnerDep
@@ -25,7 +27,12 @@ async def generate(
     owner: OwnerDep,
     ai_client: AIClientDep,
 ) -> DefinitionGenerateResponse:
-    definition = await definitions_service.generate_definition(
-        ai_client, payload.term, payload.mode, owner.native_language
+    # Side by side, so the check costs no extra wait. check_term never
+    # raises; a definition failure propagates as before.
+    definition, term_check = await asyncio.gather(
+        definitions_service.generate_definition(
+            ai_client, payload.term, payload.mode, owner.native_language
+        ),
+        definitions_service.check_term(ai_client, payload.term),
     )
-    return DefinitionGenerateResponse(definition=definition)
+    return DefinitionGenerateResponse(definition=definition, term_check=term_check)

@@ -37,6 +37,10 @@ final class CaptureStore: ObservableObject {
     @Published private(set) var isGenerating = false
     @Published var askingNativeLanguage = false
     @Published var nativeLanguageDraft = ""
+    /// What came back about the term alongside the last definition, and the
+    /// term it was about — a warning about a word since edited away is stale.
+    @Published private var termCheck: TermCheck?
+    private var checkedTerm = ""
 
     private let session: Session
     private var lookup: Task<Void, Never>?
@@ -128,6 +132,8 @@ final class CaptureStore: ObservableObject {
                 // a term that is no longer on screen is dropped, not applied.
                 if term.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed {
                     definition = response.definition
+                    termCheck = response.termCheck
+                    checkedTerm = trimmed
                 }
             } catch let error as APIError {
                 announce(error.message)
@@ -136,6 +142,24 @@ final class CaptureStore: ObservableObject {
             }
             isGenerating = false
         }
+    }
+
+    /// The check on the term as it reads now, if there is one to show.
+    var termWarning: TermCheck? {
+        term.trimmingCharacters(in: .whitespacesAndNewlines) == checkedTerm ? termCheck : nil
+    }
+
+    /// Takes the suggested spelling. The definition stays: it was written for
+    /// the word that was meant, whichever way it was typed.
+    func applyTermSuggestion() {
+        guard let suggestion = termWarning?.suggestion else { return }
+        term = suggestion
+        termCheck = nil
+    }
+
+    /// Keeps the term as typed; the warning was only ever advice.
+    func dismissTermWarning() {
+        termCheck = nil
     }
 
     /// Asks first if nothing is set yet, rather than sending the server a

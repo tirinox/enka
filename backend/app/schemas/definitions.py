@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -28,8 +29,22 @@ class DefinitionGenerateRequest(BaseModel):
         return cleaned
 
 
+class TermCheck(BaseModel):
+    """Something worth a second look about the term itself. Advisory only:
+    the client shows it and the user may save the term unchanged anyway."""
+
+    issue: Literal["misspelled", "outdated", "vulgar"]
+    #: One short sentence saying what is wrong, for the warning line.
+    note: str = Field(max_length=300)
+    #: The corrected / current / neutral form, when there is one.
+    suggestion: str | None = Field(default=None, max_length=200)
+
+
 class DefinitionGenerateResponse(BaseModel):
     #: Never persisted server-side — the client saves it itself (as the
     #: term/definition it's about to create, or via PATCH /cards/{id}) if
     #: it wants to keep it.
     definition: str
+    #: Null when the term looks fine, or when the check itself failed — a
+    #: check that could not run is never a reason to withhold the definition.
+    term_check: TermCheck | None = None

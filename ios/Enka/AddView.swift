@@ -41,6 +41,7 @@ struct AddView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     termField
+                    termWarning
                     clipboardLine
                     status
                     aiRow
@@ -84,6 +85,7 @@ struct AddView: View {
         .animation(Theme.normal, value: capture.duplicate?.id)
         .animation(Theme.normal, value: capture.justSaved)
         .animation(Theme.normal, value: capture.isGenerating)
+        .animation(Theme.normal, value: capture.termWarning)
     }
 
     // MARK: - The two fields
@@ -131,6 +133,13 @@ struct AddView: View {
             RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
                 .strokeBorder(capture.duplicate == nil ? Theme.border : Theme.accentBorder, lineWidth: 1)
         )
+    }
+
+    @ViewBuilder private var termWarning: some View {
+        if let check = capture.termWarning {
+            TermWarningLine(check: check, apply: capture.applyTermSuggestion, dismiss: capture.dismissTermWarning)
+                .transition(.opacity)
+        }
     }
 
     /// The system's own paste control rather than a button of ours.

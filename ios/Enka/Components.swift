@@ -289,6 +289,42 @@ struct StatTile: View {
     }
 }
 
+/// The AI's doubt about the term — misspelled, outdated or vulgar — with the
+/// fix one tap away. Advice, not a gate: Keep hides it, and saving without
+/// touching it saves the word exactly as typed.
+struct TermWarningLine: View {
+    let check: TermCheck
+    let apply: () -> Void
+    let dismiss: () -> Void
+
+    private var symbol: String {
+        switch check.issue {
+        case "misspelled": "textformat.abc"
+        case "outdated": "clock.arrow.circlepath"
+        default: "exclamationmark.bubble"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(check.note, systemImage: symbol)
+                .font(.footnote)
+                .foregroundStyle(Theme.warning)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 18) {
+                if let suggestion = check.suggestion {
+                    Button("Use \u{201C}\(suggestion)\u{201D}", action: apply)
+                        .foregroundStyle(Theme.accent)
+                }
+                Button("Keep as is", action: dismiss)
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .font(.footnote.weight(.medium))
+            .buttonStyle(.plain)
+        }
+    }
+}
+
 /// One line of the app's own voice — an error, or the fact that something
 /// saved. Never a dialog: nothing on these screens is important enough to
 /// stop somebody, and a phone has the room to simply say it.

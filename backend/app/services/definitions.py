@@ -9,11 +9,12 @@ on a response that never explains what went wrong.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 
 from app.core.errors import ServiceUnavailableError, ValidationError
-from app.schemas.definitions import DefinitionMode
+from app.schemas.definitions import DefinitionMode, TermCheck
 from app.services.ai_cloud import AICloudClient, AICloudError
 
 logger = logging.getLogger("enka")
@@ -168,3 +169,63 @@ async def generate_definition(
         definition,
     )
     return definition
+
+
+_CHECK_PROMPT = (
+    "A language learner is about to save the term below to a flashcard. "
+    "Detect its language and check the term itself. Flag it only if you are "
+    "sure, and pick the first that applies:\n"
+    '- "misspelled": a typo or spelling mistake (wrong or missing letters, '
+    "missing diacritics, wrong capitalisation where the language requires it)\n"
+    '- "outdated": archaic, obsolete, or an old spelling no longer standard\n'
+    '- "vulgar": obscene, offensive, or a slur\n'
+    "Informal, regional and slang words that are not offensive are fine. "
+    "Answer with JSON only, no markdown. If the term is fine: "
+    '{"issue": null}. Otherwise: {"issue": "<kind>", "note": "<one short '
+    'sentence in English saying what is wrong>", "suggestion": "<the correct, '
+    'current, or neutral form of the term, or null if there is none>"}\n\n'
+    "Term: "
+)
+
+
+def _parse_check(raw: str, term: str) -> TermCheck | None:
+    """The model's JSON verdict, or None for "fine" and for anything unusable."""
+    text = raw.strip()
+    # Models wrap JSON in a code fence even when told not to.
+    if text.startswith("```"):
+        text = text.strip("`").removeprefix("json").strip()
+    try:
+        data = json.loads(text)
+        if not isinstance(data, dict) or not data.get("issue"):
+            return None
+        check = TermCheck.model_validate(data)
+    # Pydantic's ValidationError is a ValueError too.
+    except ValueError:
+        logger.warning("ai: term check for %r returned unusable output: %r", term, raw[:200])
+        return None
+    suggestion = (check.suggestion or "").strip()
+    # A "suggestion" identical to what was typed is no suggestion at all.
+    check.suggestion = suggestion if suggestion and suggestion != term else None
+    return check
+
+
+async def check_term(client: AICloudClient, term: str) -> TermCheck | None:
+    """Asks whether `term` is misspelled, outdated or vulgar. Never raises:
+    the check is advisory, and its failure must not cost the user the
+    definition they actually asked for."""
+    started = time.monotonic()
+    try:
+        raw = await client.generate(_CHECK_PROMPT + term)
+    except AICloudError as exc:
+        logger.warning(
+            "ai: term check for %r failed after %d ms: %s", term, _elapsed_ms(started), exc
+        )
+        return None
+    check = _parse_check(raw, term)
+    logger.info(
+        "ai: term check for %r in %d ms -> %s",
+        term,
+        _elapsed_ms(started),
+        check.issue if check else "ok",
+    )
+    return check

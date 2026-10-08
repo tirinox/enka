@@ -108,6 +108,10 @@ struct CardEditorView: View {
                 .autocorrectionDisabled()
                 .focused($focus, equals: .term)
 
+            if let check = editor.termWarning {
+                TermWarningLine(check: check, apply: editor.applyTermSuggestion, dismiss: editor.dismissTermWarning)
+            }
+
             GrowingTextField(
                 placeholder: "Meaning — it can stay empty",
                 text: $editor.definition,

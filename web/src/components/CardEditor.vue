@@ -15,7 +15,7 @@ import { useToastStore } from '@/stores/toast'
 import AudioPlayer from '@/components/AudioPlayer.vue'
 import StarRating from '@/components/StarRating.vue'
 import TagChip from '@/components/TagChip.vue'
-import type { AudioSide, Card, DefinitionMode, TagWithCount } from '@/api/types'
+import type { AudioSide, Card, DefinitionMode, TagWithCount, TermCheck } from '@/api/types'
 
 const props = defineProps<{ card: Card | null; open: boolean; knownTags: TagWithCount[] }>()
 const emit = defineEmits<{ close: []; saved: [Card]; deleted: [string] }>()
@@ -115,6 +115,18 @@ function removeTag(name: string) {
 const defining = ref<DefinitionMode | null>(null)
 const askingNativeLanguage = ref(false)
 const nativeLanguageDraft = ref('')
+// The check that came back with the last definition, and the term it was
+// about — once the term is edited, the warning is about a different word.
+const termCheck = ref<{ term: string; check: TermCheck } | null>(null)
+const termWarning = computed(() =>
+  termCheck.value && termCheck.value.term === term.value.trim() ? termCheck.value.check : null,
+)
+
+function applyTermSuggestion() {
+  const suggestion = termWarning.value?.suggestion
+  if (suggestion) term.value = suggestion
+  termCheck.value = null
+}
 
 const canGenerate = computed(() => term.value.trim().length > 0 && defining.value === null)
 
@@ -131,7 +143,10 @@ async function generate(mode: DefinitionMode) {
     const result = await api.definitions.generate(typed, mode)
     // The term may have changed while a slow local model was still
     // thinking — an answer for a word no longer on screen is dropped.
-    if (term.value.trim() === typed) definition.value = result.definition
+    if (term.value.trim() === typed) {
+      definition.value = result.definition
+      termCheck.value = result.term_check ? { term: typed, check: result.term_check } : null
+    }
   } catch (e) {
     if (e instanceof ApiError) toasts.error(e.message)
   } finally {
@@ -292,6 +307,17 @@ const srsLabel = computed(() => {
               placeholder="the word you're learning"
               @keydown.meta.enter="save"
             />
+            <div v-if="termWarning" class="term-warning">
+              <span>{{ termWarning.note }}</span>
+              <button
+                v-if="termWarning.suggestion"
+                class="btn btn-ghost btn-sm"
+                @click="applyTermSuggestion"
+              >
+                Use “{{ termWarning.suggestion }}”
+              </button>
+              <button class="btn btn-ghost btn-sm" @click="termCheck = null">Keep as is</button>
+            </div>
           </div>
 
           <div class="field">
@@ -567,6 +593,15 @@ h2 {
   display: flex;
   gap: var(--sp-2);
   flex-shrink: 0;
+}
+
+.term-warning {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--warning);
+  font-size: 0.875rem;
 }
 
 .native-language-prompt {

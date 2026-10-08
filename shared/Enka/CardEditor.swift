@@ -41,6 +41,10 @@ final class CardEditor: ObservableObject {
     @Published private(set) var isGenerating = false
     @Published var askingNativeLanguage = false
     @Published var nativeLanguageDraft = ""
+    /// What came back about the term alongside the last definition, and the
+    /// term it was about — a warning about a word since edited away is stale.
+    @Published private var termCheck: TermCheck?
+    private var checkedTerm = ""
 
     private let session: Session
 
@@ -194,12 +198,34 @@ final class CardEditor: ObservableObject {
                 // The term can be edited while a local model is still thinking
                 // about the last one; an answer for a word no longer on screen
                 // is dropped rather than written under a different one.
-                if trimmedTerm == subject { definition = response.definition }
+                if trimmedTerm == subject {
+                    definition = response.definition
+                    termCheck = response.termCheck
+                    checkedTerm = subject
+                }
             } catch {
                 announce(error)
             }
             isGenerating = false
         }
+    }
+
+    /// The check on the term as it reads now, if there is one to show.
+    var termWarning: TermCheck? {
+        trimmedTerm == checkedTerm ? termCheck : nil
+    }
+
+    /// Takes the suggested spelling. The definition stays: it was written for
+    /// the word that was meant, whichever way it was typed.
+    func applyTermSuggestion() {
+        guard let suggestion = termWarning?.suggestion else { return }
+        term = suggestion
+        termCheck = nil
+    }
+
+    /// Keeps the term as typed; the warning was only ever advice.
+    func dismissTermWarning() {
+        termCheck = nil
     }
 
     /// Asks first if nothing is set yet, rather than sending the server a

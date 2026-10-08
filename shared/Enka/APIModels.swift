@@ -431,6 +431,21 @@ enum DefinitionMode: String, Encodable {
 
 struct DefinitionGenerateResponse: Decodable {
     let definition: String
+    let termCheck: TermCheck?
+
+    enum CodingKeys: String, CodingKey {
+        case definition
+        case termCheck = "term_check"
+    }
+}
+
+/// The server's second opinion on the term itself, sent along with a generated
+/// definition. Advisory: the term saves unchanged if the user wants it so.
+struct TermCheck: Decodable, Equatable {
+    /// "misspelled", "outdated" or "vulgar".
+    let issue: String
+    let note: String
+    let suggestion: String?
 }
 
 struct HealthResponse: Decodable {

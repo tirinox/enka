@@ -242,8 +242,16 @@ export interface MeUpdate {
 
 export type DefinitionMode = 'same_language' | 'native_language'
 
+/** Advisory: the term can be saved unchanged anyway. */
+export interface TermCheck {
+  issue: 'misspelled' | 'outdated' | 'vulgar'
+  note: string
+  suggestion: string | null
+}
+
 export interface DefinitionGenerateResponse {
   definition: string
+  term_check: TermCheck | null
 }
 
 export interface HealthResponse {
