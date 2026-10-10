@@ -96,7 +96,6 @@ struct AddView: View {
                 .font(.system(.title2, design: .serif).weight(.medium))
                 .foregroundStyle(Theme.text)
                 .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
                 .submitLabel(.next)
                 .focused($focus, equals: .term)
                 .onSubmit { focus = .definition }

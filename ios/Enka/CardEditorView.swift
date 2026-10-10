@@ -105,7 +105,6 @@ struct CardEditorView: View {
                 .font(.system(.title3, design: .serif).weight(.medium))
                 .foregroundStyle(Theme.text)
                 .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
                 .focused($focus, equals: .term)
 
             if let check = editor.termWarning {
@@ -205,7 +204,6 @@ struct CardEditorView: View {
                     .foregroundStyle(Theme.textFaint)
                 TextField("Add a tag", text: $tagDraft)
                     .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
                     .submitLabel(.done)
                     .focused($focus, equals: .tag)
                     .onSubmit(commitTagDraft)
