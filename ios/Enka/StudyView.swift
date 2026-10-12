@@ -34,6 +34,8 @@ struct StudyView: View {
     /// rather than asked for again.
     @State private var day: DaySeed?
 
+    @State private var isConfirmingDelete = false
+
     var body: some View {
         VStack(spacing: 0) {
             topBar
@@ -109,6 +111,60 @@ struct StudyView: View {
         .animation(Theme.fast, value: study.undoableCard)
     }
 
+    /// Hear it again, in the bottom third where the thumb already is.
+    ///
+    /// Plays whichever side is readable right now — the store's own rule asked
+    /// from the other direction — falling back to the whole card when that
+    /// side is silent, so a clip recorded against the hidden half is still one
+    /// press away rather than unreachable.
+    ///
+    /// The button is the indicator: filled and clay with its waves moving while
+    /// a clip runs, hollow and grey when not. Pressing it mid-clip stops it,
+    /// because the second press of a replay button is always "no, enough".
+    ///
+    /// Its slot is held even for a card with no audio at all. Letting the row
+    /// collapse would move "Show answer" up and down between cards, and a
+    /// thumb that has learned where that button is should not have to look.
+    @ViewBuilder private var replay: some View {
+        let clips = audibleClips
+        let isPlaying = clips.contains { $0.id == audio.playingClipID }
+        Button {
+            if isPlaying {
+                audio.stop()
+            } else {
+                audio.playAll(clips, using: session)
+            }
+        } label: {
+            HStack(spacing: 7) {
+                if audio.isFetching {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                        .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                }
+                Text(isPlaying ? "Playing" : "Play again")
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(isPlaying ? Theme.accent : Theme.textMuted)
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .background(Capsule().fill(isPlaying ? Theme.accentSoft : Theme.surface))
+            .overlay(Capsule().strokeBorder(isPlaying ? Theme.accentBorder : Theme.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .frame(height: 36)
+        .opacity(clips.isEmpty ? 0 : 1)
+        .disabled(clips.isEmpty)
+        .accessibilityLabel(isPlaying ? "Stop audio" : "Play audio again")
+    }
+
+    private var audibleClips: [AudioClip] {
+        guard let current = study.currentCard else { return [] }
+        let visible = current.card.clips(for: study.visibleSide(of: current, revealed: study.isRevealed))
+        if !visible.isEmpty { return visible }
+        return current.card.clips(for: .term) + current.card.clips(for: .definition)
+    }
+
     /// The streak and the day's tally, quiet next to the due count.
     ///
     /// The flame is grey until the day's first answer lands and then turns
@@ -163,12 +219,10 @@ struct StudyView: View {
                 } label: {
                     Label("Pause this card", systemImage: "pause.circle")
                 }
-                if !card.clips(for: .term).isEmpty || !card.clips(for: .definition).isEmpty {
-                    Button {
-                        audio.playAll(card.clips(for: .term) + card.clips(for: .definition), using: session)
-                    } label: {
-                        Label("Play audio", systemImage: "speaker.wave.2")
-                    }
+                Button(role: .destructive) {
+                    isConfirmingDelete = true
+                } label: {
+                    Label("Delete this card", systemImage: "trash")
                 }
                 Divider()
             }
@@ -184,6 +238,22 @@ struct StudyView: View {
                 .foregroundStyle(Theme.textMuted)
                 .frame(width: 40, height: 40)
         }
+        .confirmationDialog(
+            study.currentCard.map { "Delete “\($0.card.term)”?" } ?? "Delete this card?",
+            isPresented: $isConfirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { deleteCurrent() }
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("The Cards list offers it back for a few seconds.")
+        }
+    }
+
+    private func deleteCurrent() {
+        guard let card = study.currentCard?.card else { return }
+        library.delete(card)
+        study.reload()
     }
 
     // MARK: - The card
@@ -258,6 +328,16 @@ struct StudyView: View {
     /// Fixed height whatever is in it, so revealing an answer never moves the
     /// card above it.
     @ViewBuilder private var bottom: some View {
+        VStack(spacing: 10) {
+            replay
+            answerControls
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+        .animation(Theme.normal, value: study.isRevealed)
+    }
+
+    @ViewBuilder private var answerControls: some View {
         Group {
             if let notice = study.notice {
                 Text(notice)
@@ -274,9 +354,7 @@ struct StudyView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
         .frame(height: 92)
-        .animation(Theme.normal, value: study.isRevealed)
     }
 
     private var ratings: some View {
